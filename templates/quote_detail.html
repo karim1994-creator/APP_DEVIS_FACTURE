@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+
+{% block title %}Détail du devis {{ quote.quote_number }}{% endblock %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <!-- 🔥 Affichage des messages flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <h1 class="mb-4">Devis {{ quote.quote_number }}</h1>
+    <p><strong>Date :</strong> {{ quote.creation_date.strftime('%d/%m/%Y') }}</p>
+    <div class="info"><strong>Code client :</strong> {{ quote.client.code }}</div>
+    <div class="info"><strong>Entreprise :</strong> {{ quote.client.company }}</div>
+    <p><strong>Client :</strong> {{ quote.client.first_name }} {{ quote.client.last_name }}</p>
+    <p><strong>Lieu de livraison :</strong> {{ quote.delivery_location }}</p>
+
+    <h2>Liste des produits:</h2>
+    <table class="table table-striped table-bordered table-hover">
+        <thead class="table-primary">
+            <tr>
+                <th>Réf. Fourn.</th>
+                <th>Désignation</th>
+                <th>Quantité</th>
+                <th>Prix client</th>
+                <th>Prix fournisseur le moins cher</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in lines %}
+            <tr>
+                <td>{{ l.supplier_ref }}</td>
+                <td>{{ l.description }}</td>
+                <td>{{ l.quantity }}</td>
+                <td>{{ '%.2f'|format(l.client_price) }} €</td>
+                <td>
+                    {% if l.best_price %}
+                        <div style="color: green; font-weight: bold;">
+                            Fournisseur {{ l.best_price.supplier_id }} : {{ '%.2f'|format(l.best_price.price) }} €
+                        </div>
+                    {% else %}
+                        <div>Aucun prix disponible</div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Informations livraison par fournisseur</h2>
+    <form method="post" action="{{ url_for('update_supplier_info', quote_id=quote.id) }}">
+        <table class="table table-striped table-bordered table-hover" id="supplier-table">
+            <thead class="table-primary">
+                <tr>
+                    <th>Fournisseur</th>
+                    <th>Délai (j)</th>
+                    <th>Frais (€)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for info in supplier_info %}
+                <tr>
+                    <td>
+                        <input type="text" name="supplier_id_{{ loop.index }}" value="{{ info.supplier_id }}" class="form-control" readonly>
+                    </td>
+                    <td>
+                        <input type="number" name="delivery_delay_{{ loop.index }}" value="{{ info.delivery_delay }}" class="form-control">
+                    </td>
+                    <td>
+                        <input type="number" step="0.01" name="delivery_fee_{{ loop.index }}" value="{{ info.delivery_fee }}" class="form-control">
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <input type="hidden" name="total_rows" value="{{ supplier_info|length }}">
+        <button type="submit" class="btn btn-success">Enregistrer</button>
+        <a href="{{ url_for('list_quotes') }}" class="btn btn-outline-primary">← Retour à la liste des devis</a>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const table = document.getElementById('supplier-table');
+
+    table.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault(); // Empêche la soumission du formulaire
+
+            const currentInput = event.target;
+            const inputs = Array.from(table.querySelectorAll('input'));
+            const index = inputs.indexOf(currentInput);
+
+            if (index >= 0 && index < inputs.length - 1) {
+                inputs[index + 1].focus();
+            } else {
+                const submitButton = table.closest('form').querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.focus();
+                }
+            }
+        }
+    });
+});
+</script>
+
+{% endblock %}

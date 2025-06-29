@@ -1,0 +1,19 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Accueil{% endblock %}
+
+{% block content %}
+
+<div class="container mt-5">
+    <h1 class="mb-4">Bienvenue</h1>
+
+    <!-- Section Boutons d'ajout -->
+    <div class="mb-4">
+        <a href="{{ url_for('add_client') }}" class="btn btn-primary btn-lg mb-3">Ajouter un client</a><br>
+        <a href="{{ url_for('add_supplier') }}" class="btn btn-primary btn-lg mb-3">Ajouter un fournisseur</a><br>
+        <a href="{{ url_for('create_quote') }}" class="btn btn-primary btn-lg mb-3">Créé un devis</a><br>
+    </div>
+
+    <hr>
+</div>
+{% endblock %}

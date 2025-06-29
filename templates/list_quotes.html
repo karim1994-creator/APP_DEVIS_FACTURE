@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+
+{% block title %}Liste des devis{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <h1 class="mb-4">Liste des devis</h1>
+
+  <!-- Formulaire de recherche (envoie GET au serveur) -->
+  <div class="mb-3 d-flex gap-2">
+    <input
+      id="searchInput"
+      type="search"
+      class="form-control"
+      placeholder="Rechercher un devis, client, date..."
+      aria-label="Recherche"
+      value="{{ search }}"
+      onkeydown="if (event.key === 'Enter') { event.preventDefault(); launchSearch(); }"
+    >
+    <button class="btn btn-outline-secondary" onclick="clearSearch()">Effacer</button>
+  </div>
+
+  <div id="quoteListContainer">
+    <table class="table table-striped table-bordered table-hover" id="quotesTable">
+      <thead class="table-primary">
+        <tr>
+          <th>Numéro de devis</th>
+          <th>Date de création</th>
+          <th>Client</th>
+          <th>Détail</th>
+          <th>Action</th>
+          <th>Modifier / Compléter</th>
+          <th>Supprimer</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in quotes %}
+        <tr>
+          <td>{{ q.quote_number }}</td>
+          <td>{{ q.creation_date.strftime('%d/%m/%Y') }}</td>
+          <td>{{ q.client.first_name }} {{ q.client.last_name }}</td>
+          <td>
+            <a href="{{ url_for('quote_detail', quote_id=q.id) }}" class="btn btn-sm btn-outline-primary">Voir détail</a>
+          </td>
+          <td>
+            <button class="btn btn-sm btn-action"
+                    data-quote-id="{{ q.id }}"
+                    data-quote-number="{{ q.quote_number }}"
+                    data-current-statut="{{ suivi_map[q.id] }}"
+                    style="background-color: {{
+                      'validate_commande' == suivi_map[q.id] and '#28A745' or
+                      'commande' == suivi_map[q.id] and '#007BFF' or
+                      'reception' == suivi_map[q.id] and '#28A745' or
+                      'control_reception' == suivi_map[q.id] and '#FFC107' or
+                      'livraison_client' == suivi_map[q.id] and '#6F42C1' or
+                      'a_facturer' == suivi_map[q.id] and '#FFC107' or
+                      'facturation' == suivi_map[q.id] and '#DC3545' or
+                      'grey'
+                    }}; color: white;">
+              {% if suivi_map[q.id] == 'validate_commande' %}Valider
+              {% elif suivi_map[q.id] == 'commande' %}Commander
+              {% elif suivi_map[q.id] == 'reception' %}Réception
+              {% elif suivi_map[q.id] == 'control_reception' %}Contrôle réception
+              {% elif suivi_map[q.id] == 'livraison_client' %}Livraison client
+              {% elif suivi_map[q.id] == 'a_facturer' %}À facturer
+              {% elif suivi_map[q.id] == 'facturation' %}Facturation
+              {% else %}Terminé{% endif %}
+            </button>
+          </td>
+          <td>
+            <form action="{{ url_for('edit_quote', quote_id=q.id) }}" method="GET">
+              <button type="submit" class="btn btn-sm btn-warning">Modifier / Compléter</button>
+            </form>
+          </td>
+          <td>
+            <form action="{{ url_for('delete_quote', quote_id=q.id) }}" method="POST"
+                  onsubmit="return confirm('Voulez-vous vraiment supprimer ce devis et toutes ses données associées ?');">
+              <button type="submit" class="btn btn-sm btn-danger">Supprimer</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <a href="{{ url_for('create_quote') }}" class="btn btn-success">Créer un nouveau devis</a>
+
+      <nav aria-label="Pagination">
+        <ul class="pagination mb-0">
+          <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('list_quotes', page=page-1, search=search) }}" aria-label="Précédent">
+              <span aria-hidden="true">&laquo;</span>
+            </a>
+          </li>
+
+          {% for p in range(1, total_pages + 1) %}
+          <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('list_quotes', page=p, search=search) }}">{{ p }}</a>
+          </li>
+          {% endfor %}
+
+          <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+            <a class="page-link" href="{{ url_for('list_quotes', page=page+1, search=search) }}" aria-label="Suivant">
+              <span aria-hidden="true">&raquo;</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.btn-action').forEach(button => {
+  button.addEventListener('click', () => {
+    const quoteId       = button.dataset.quoteId;
+    const quoteNumber   = button.dataset.quoteNumber;
+    const currentStatut = button.dataset.currentStatut;
+
+    const messages = {
+      'validate_commande': 'Êtes-vous sûr de valider le devis ?',
+      'commande': "Êtes-vous sûr d'avoir passé la commande ?",
+      'reception': "Êtes-vous sûr d'avoir réceptionné la commande ?",
+      'control_reception': "Êtes-vous sûr d'avoir contrôlé la réception ?",
+      'livraison_client': "Êtes-vous sûr d'avoir livré la commande ?",
+      'a_facturer': "Êtes-vous sûr de passer le devis à « à facturer » ?",
+      'facturation': "Avez-vous reçu le paiement ?"
+    };
+
+    if (!messages[currentStatut]) {
+      alert('Statut final ou inconnu');
+      return;
+    }
+    if (!confirm(messages[currentStatut])) return;
+
+    fetch(`/quotes/${quoteId}/advance_status`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'}
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) {
+        alert('Erreur : ' + data.message);
+        return;
+      }
+      if (data.new_statut === 'terminé') {
+        button.style.display = 'none';
+      } else {
+        const mapping = {
+          'validate_commande': ['Valider', '#28A745'],
+          'commande': ['Commander', '#007BFF'],
+          'reception': ['Réception', '#28A745'],
+          'control_reception': ['Contrôle réception', '#FFC107'],
+          'livraison_client': ['Livraison client', '#6F42C1'],
+          'a_facturer': ['À facturer', '#FFC107'],
+          'facturation': ['Facturation', '#DC3545'],
+        };
+        const [text, color] = mapping[data.new_statut] || ['Terminé', 'grey'];
+        button.textContent = text;
+        button.style.backgroundColor = color;
+        button.dataset.currentStatut = data.new_statut;
+
+        const subject = `Changement de statut du devis ${quoteNumber}`;
+        const body = `Bonjour,
+
+Le devis ${quoteNumber} est passé de '${currentStatut}' à '${data.new_statut}'.
+
+Cordialement,
+Atlantis Evolution`;
+
+        const link = `mailto:f.bertolini@atlantis-evolution.com,admin@atlantis-evolution.com`
+                   + `?subject=${encodeURIComponent(subject)}`
+                   + `&body=${encodeURIComponent(body)}`;
+
+        window.location.href = link;
+      }
+    })
+    .catch(() => alert('Erreur réseau'));
+  });
+});
+</script>
+
+<script>
+function launchSearch() {
+  const input = document.getElementById('searchInput');
+  const search = input.value.trim();
+  const params = new URLSearchParams(window.location.search);
+  if (search) {
+    params.set('search', search);
+    params.set('page', 1); // reset to first page
+  } else {
+    params.delete('search');
+  }
+  window.location.href = window.location.pathname + '?' + params.toString();
+}
+
+function clearSearch() {
+  const input = document.getElementById('searchInput');
+  input.value = '';
+  const params = new URLSearchParams(window.location.search);
+  params.delete('search');
+  params.set('page', 1);
+  window.location.href = window.location.pathname + '?' + params.toString();
+}
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('searchInput');
+    const container = document.getElementById('quoteListContainer');
+
+    function performSearch() {
+        const query = input.value.trim();
+
+        fetch(`/search_quotes?q=${encodeURIComponent(query)}`)
+            .then(response => response.text())
+            .then(html => {
+                container.innerHTML = html;
+
+                // focus à la fin du champ
+                input.focus();
+                const val = input.value;
+                input.value = '';
+                input.value = val;
+            });
+    }
+
+    // Recherche en direct sur saisie
+    input.addEventListener('input', function () {
+        performSearch();
+    });
+
+    // Recherche au "Entrée"
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            performSearch();
+        }
+    });
+});
+</script>
+
+<script>
+  window.onload = function() {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      searchInput.focus();
+    }
+  }
+</script>
+
+
+{% endblock %}

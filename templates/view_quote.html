@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}Détails du Devis{% endblock %}
+
+{% block content %}
+<h1>Détails du Devis</h1>
+
+<p><strong>Numéro du devis :</strong> {{ quote.quote_number }}</p>
+<p><strong>Date de création :</strong> {{ quote.creation_date.strftime('%d-%m-%Y') }}</p>
+<p><strong>Client :</strong> {{ client.code }} : {{ client.company }}</p>
+<p><strong>Lieu de livraison :</strong> {{ quote.delivery_location }}</p>
+
+<h2>Lignes du Devis</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Réf. Fourn.</th>
+            <th>Désignation</th>
+            <th>Quantité</th>
+            <th>Prix Client</th>
+            <th>Prix Fournisseurs</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for line in lines %}
+        <tr>
+            <td>{{ line.supplier_ref }}</td>
+            <td>{{ line.description }}</td>
+            <td>{{ line.quantity }}</td>
+            <td>{{ "%.2f"|format(line.client_price) }} €</td>
+            <td>
+                <ul>
+                    {% for price in supplier_prices[line.id] %}
+                        <li>{{ supplier_dict[price.supplier_id].company }}: {{ "%.2f"|format(price.price) }} €</li>
+                    {% endfor %}
+                </ul>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Informations Livraison Fournisseurs</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Fournisseur</th>
+            <th>Délai de livraison (j)</th>
+            <th>Frais de livraison (€)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for info in supplier_infos %}
+        <tr>
+            <td>{{ supplier_dict[info.supplier_id].company }}</td>
+            <td>{{ info.delivery_delay }}</td>
+            <td>{{ "%.2f"|format(info.delivery_fee) }} €</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

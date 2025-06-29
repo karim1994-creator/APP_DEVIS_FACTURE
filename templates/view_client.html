@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}Détail Client{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Détail / Modifier Client</h2>
+
+    <form method="post">
+        <div class="row g-3">
+            <!-- Nom -->
+            <div class="col-md-6">
+                <label for="last_name" class="form-label">Nom :</label>
+                <input type="text" class="form-control" id="last_name" name="last_name" value="{{ client.last_name }}">
+            </div>
+
+            <!-- Prénom -->
+            <div class="col-md-6">
+                <label for="first_name" class="form-label">Prénom :</label>
+                <input type="text" class="form-control" id="first_name" name="first_name" value="{{ client.first_name }}">
+            </div>
+
+            <!-- Email -->
+            <div class="col-md-6">
+                <label for="email" class="form-label">Email :</label>
+                <input type="email" class="form-control" id="email" name="email" value="{{ client.email }}">
+            </div>
+
+            <!-- Société -->
+            <div class="col-md-6">
+                <label for="company" class="form-label">Société :</label>
+                <input type="text" class="form-control" id="company" name="company" value="{{ client.company }}">
+            </div>
+
+            <!-- Adresse -->
+            <div class="col-md-6">
+                <label for="address" class="form-label">Adresse :</label>
+                <input type="text" class="form-control" id="address" name="address" value="{{ client.address }}">
+            </div>
+
+            <!-- Ville -->
+            <div class="col-md-6">
+                <label for="city" class="form-label">Ville :</label>
+                <input type="text" class="form-control" id="city" name="city" value="{{ client.city }}">
+            </div>
+
+            <!-- Téléphone -->
+            <div class="col-md-6">
+                <label for="phone" class="form-label">Téléphone :</label>
+                <input type="text" class="form-control" id="phone" name="phone" value="{{ client.phone }}">
+            </div>
+
+            <!-- Mobile -->
+            <div class="col-md-6">
+                <label for="mobile" class="form-label">Mobile :</label>
+                <input type="text" class="form-control" id="mobile" name="mobile" value="{{ client.mobile }}">
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

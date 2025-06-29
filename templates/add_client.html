@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+
+{% block title %}Ajouter un Client{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Ajouter un Client</h2>
+
+    <form method="post" id="clientForm" onsubmit="return validateForm()">
+        <div class="mb-3">
+            <label for="code" class="form-label">Code :</label>
+            <input type="text" id="code" name="code" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="civility" class="form-label">Civilité :</label>
+            <select class="form-select" id="civility" name="civility" required>
+                <option value="" disabled selected>-- Choisissez --</option>
+                <option value="Mr.">Mr</option>
+                <option value="Mme.">Mme</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="last_name" class="form-label">Nom :</label>
+            <input type="text" id="last_name" name="last_name" class="form-control">
+        </div>
+
+        <div class="mb-3">
+            <label for="first_name" class="form-label">Prénom :</label>
+            <input type="text" id="first_name" name="first_name" class="form-control">
+        </div>
+
+        <div class="mb-3">
+            <label for="email" class="form-label">Email :</label>
+            <input 
+                type="email" 
+                id="email" 
+                name="email" 
+                class="form-control" 
+                placeholder="exemple@domaine.com" 
+                style="font-weight: 300; font-style: italic; font-size: 0.9em;" 
+                required
+            >
+        </div>
+
+        <div class="mb-3">
+            <label for="job" class="form-label">Métier/Fonction :</label>
+            <input type="text" id="job" name="job" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="company" class="form-label">Société/Nom :</label>
+            <input type="text" id="company" name="company" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="address" class="form-label">Adresse :</label>
+            <input type="text" id="address" name="address" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="city" class="form-label">Ville :</label>
+            <input type="text" id="city" name="city" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="phone" class="form-label">Téléphone :</label>
+            <input type="text" id="phone" name="phone" class="form-control">
+        </div>
+
+        <div class="mb-3">
+            <label for="mobile" class="form-label">Portable :</label>
+            <input type="text" id="mobile" name="mobile" class="form-control">
+        </div>
+
+        <div class="mb-3">
+            <small class="text-muted">* Vous devez remplir soit le champ "Téléphone" soit "Portable".</small>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Ajouter</button>
+    </form>
+</div>
+
+<script>
+function validateForm() {
+    // Récupération des champs
+    const phone = document.getElementById('phone').value.trim();
+    const mobile = document.getElementById('mobile').value.trim();
+    const code = document.getElementById('code').value.trim();
+    const civility = document.getElementById('civility').value;
+    const email = document.getElementById('email').value.trim();
+    const job = document.getElementById('job').value.trim();
+    const company = document.getElementById('company').value.trim();
+    const address = document.getElementById('address').value.trim();
+    const city = document.getElementById('city').value.trim();
+
+    // Vérification des champs obligatoires
+    if (!code || !civility || !email || !job || !company || !address || !city) {
+        alert("Tous les champs obligatoires doivent être remplis.");
+        return false;
+    }
+
+    // Vérification que l'utilisateur a rempli soit téléphone soit portable
+    if (!phone && !mobile) {
+        alert("Vous devez remplir soit le champ 'Téléphone' soit 'Portable'.");
+        return false;
+    }
+
+    // Si tout est bon, soumettre le formulaire
+    return true;
+}
+
+// Gestion professionnelle de la touche Entrée pour passer au champ suivant
+document.getElementById('clientForm').addEventListener('keydown', function(event) {
+    if (event.key === "Enter") {
+        const form = event.target.form;
+        const elements = Array.from(form.elements).filter(el => el.tagName !== 'BUTTON' && !el.disabled && el.type !== 'hidden');
+        const index = elements.indexOf(event.target);
+        if (index > -1) {
+            event.preventDefault();
+            const nextIndex = (index + 1) % elements.length;
+            elements[nextIndex].focus();
+        }
+    }
+});
+</script>
+
+{% endblock %}
