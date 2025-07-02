@@ -53,12 +53,7 @@ Puis ouvre dans le navigateur : http://localhost:5000
 
 ---
 
-## 📬 Tests & Email
 
-- Dans `.env`, configure ton serveur SMTP.
-- Utilise `/send_quote` ou la route dédiée pour tester l’envoi d’e‑mails.
-
----
 
 ## 📄 Fonctionnalités
 
