@@ -1,56 +1,77 @@
+# Import des modules Flask nécessaires pour gérer les routes, formulaires, sessions, redirections, etc.
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
-from werkzeug.security import check_password_hash, generate_password_hash
-from models import db, create_database, Client, Supplier, Quote, QuoteLine, SupplierPrice, QuoteSupplierInfo, \
-    SuiviQuotes
-from datetime import datetime
-from flask_mail import Message, Mail
-from itsdangerous import URLSafeTimedSerializer as Serializer
-from flask import current_app
-from itsdangerous import SignatureExpired
-from flask import render_template, request, redirect, url_for, flash
-from werkzeug.security import generate_password_hash
-from models import db, User
-from itsdangerous import URLSafeTimedSerializer as Serializer
-from flask import current_app
-from itsdangerous import SignatureExpired
-from collections import defaultdict
-from datetime import datetime, date
-from sqlalchemy import func, or_
-from flask import request
-from sqlalchemy.orm import joinedload
-from sqlalchemy import or_, func
 
+# Import pour gérer la sécurité des mots de passe (hash)
+from werkzeug.security import check_password_hash, generate_password_hash
+
+# Import des modèles de données et fonctions associées (base de données, tables, etc.)
+from models import db, create_database, Client, Supplier, Quote, QuoteLine, SupplierPrice, QuoteSupplierInfo, SuiviQuotes
+
+# Gestion des dates et heures
+from datetime import datetime
+
+# Import pour gérer l’envoi d’emails via Flask-Mail
+from flask_mail import Message, Mail
+
+# Import pour générer et vérifier des tokens sécurisés (ex: pour réinitialisation mot de passe)
+from itsdangerous import URLSafeTimedSerializer as Serializer
+from flask import current_app
+from itsdangerous import SignatureExpired
+
+# Import pour gérer des collections avancées (ex: dictionnaires avec valeurs par défaut)
+from collections import defaultdict
+
+# Import de fonctions SQLAlchemy pour requêtes complexes
+from sqlalchemy import func, or_
+from sqlalchemy.orm import joinedload
+from sqlalchemy import cast, String
+from utils import get_suivi_map
+import os
+# Liste des différents statuts possibles d’une commande dans le workflow
 statut_order = [
-    'validate_commande',  # Valider
-    'commande',  # Commander
-    'reception',  # Réception
-    'control_reception',  # Contrôle réception
-    'livraison_client',  # Livraison client
+    'validate_commande',  # Validation de la commande
+    'commande',  # Commande passée
+    'reception',  # Réception des marchandises
+    'control_reception',  # Contrôle qualité à la réception
+    'livraison_client',  # Livraison au client
     'a_facturer',  # À facturer
-    'facturation',  # Facturation
-    'cloture'  # cloturé
+    'facturation',  # Facturation effectuée
+    'cloture'  # Commande clôturée
 ]
 
+# Création de l’application Flask
 app = Flask(__name__)
-app.secret_key = 'b5f9a3408ed34d8a9d8a5bfa7c69598c'  # Change ça avec une vraie clé secrète
+
+# Clé secrète utilisée par Flask (session, flash, etc.) => à changer pour un projet réel
+app.secret_key = 'b5f9a3408ed34d8a9d8a5bfa7c69598c'
+
+# Configuration de la base de données SQLite locale
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialisation de la base de données avec l'application Flask
 db.init_app(app)
+
+# Chargement des configurations supplémentaires depuis un fichier config.py
 app.config.from_object('config')
+
+# Initialisation de l’extension Flask-Mail pour l’envoi d’emails
 mail = Mail(app)
 
+# Création de la base de données si elle n'existe pas, dans le contexte de l'application
 with app.app_context():
     create_database()
 
-
+# Route principale, affiche la page d’accueil index.html
 @app.route('/')
 def index():
     return render_template('index.html')
 
-
+# Route pour ajouter un nouveau client, gère formulaire en GET et POST
 @app.route('/add_client', methods=['GET', 'POST'])
 def add_client():
     if request.method == 'POST':
+        # Création d’un nouvel objet Client à partir des données du formulaire
         client = Client(
             code=request.form['code'],
             civility=request.form['civility'],
@@ -64,19 +85,23 @@ def add_client():
             phone=request.form['phone'],
             mobile=request.form['mobile'],
         )
+        # Ajout en base et sauvegarde
         db.session.add(client)
         db.session.commit()
+        # Redirection vers la liste des clients après ajout
         return redirect(url_for('list_clients'))
+    # Si méthode GET, affichage du formulaire d’ajout client
     return render_template('add_client.html')
 
-
+# Route pour afficher la liste des clients avec pagination et recherche
 @app.route('/clients')
 def list_clients():
+    # Récupération des paramètres GET : recherche et numéro de page
     search = request.args.get('search', '', type=str)
     page = request.args.get('page', 1, type=int)
-    per_page = 5
+    per_page = 5  # Nombre de clients par page
 
-    query = Client.query
+    query = Client.query  # Base de la requête
 
     if search:
         # Recherche insensible à la casse sur plusieurs colonnes
@@ -90,11 +115,13 @@ def list_clients():
             (Client.code.ilike(like_pattern))
         )
 
-    # Trier (exemple : par nom)
+    # Tri des résultats par nom de famille
     query = query.order_by(Client.last_name)
 
+    # Pagination des résultats
     pagination = query.paginate(page=page, per_page=per_page)
 
+    # Affichage du template avec la liste des clients paginée
     return render_template(
         'list_clients.html',
         clients=pagination,
@@ -103,30 +130,31 @@ def list_clients():
         total_pages=pagination.pages
     )
 
-
+# Route pour supprimer un client (via POST) par son ID
 @app.route('/delete-client/<int:client_id>', methods=['POST'])
 def delete_client(client_id):
+    # Recherche du client ou 404 si non trouvé
     client = Client.query.get_or_404(client_id)
 
-    # Vérifie si le client a des devis
+    # Vérifie si le client a des devis associés (on ne peut pas supprimer dans ce cas)
     if client.quotes:
         quote_numbers = [quote.quote_number for quote in client.quotes]
         quote_list = ', '.join(quote_numbers)
-        flash(f"Vous ne pouvez pas supprimer ce client car il est utilisé dans les devis suivants : {quote_list}",
-              'danger')
+        flash(f"Vous ne pouvez pas supprimer ce client car il est utilisé dans les devis suivants : {quote_list}", 'danger')
         return redirect(url_for('list_clients'))
 
-        # Sinon, supprimer
+    # Si pas de devis liés, suppression du client
     db.session.delete(client)
     db.session.commit()
     flash('Client supprimé avec succès.', 'success')
     return redirect(url_for('list_clients'))
 
-
+# Route pour éditer les informations d’un client existant
 @app.route('/client/edit/<int:client_id>', methods=['GET', 'POST'])
 def edit_client(client_id):
-    client = Client.query.get_or_404(client_id)
+    client = Client.query.get_or_404(client_id)  # Recherche client
     if request.method == 'POST':
+        # Mise à jour des champs du client à partir du formulaire
         client.code = request.form['code']
         client.civility = request.form['civility']
         client.last_name = request.form['last_name']
@@ -141,9 +169,10 @@ def edit_client(client_id):
         db.session.commit()
         flash("Client mis à jour avec succès.", "success")
         return redirect(url_for('list_clients'))
+    # Si GET, affichage du formulaire pré-rempli
     return render_template('edit_client.html', client=client)
 
-
+# Route pour afficher la liste des fournisseurs (avec recherche et pagination)
 @app.route('/suppliers')
 def list_suppliers():
     search = request.args.get('search', '', type=str)
@@ -153,7 +182,6 @@ def list_suppliers():
     query = Supplier.query
 
     if search:
-        # Recherche insensible à la casse sur plusieurs colonnes
         like_pattern = f"%{search}%"
         query = query.filter(
             (Supplier.first_name.ilike(like_pattern)) |
@@ -164,9 +192,7 @@ def list_suppliers():
             (Supplier.code.ilike(like_pattern))
         )
 
-    # Trier (exemple : par nom)
     query = query.order_by(Supplier.last_name)
-
     pagination = query.paginate(page=page, per_page=per_page)
 
     return render_template(
@@ -177,27 +203,30 @@ def list_suppliers():
         total_pages=pagination.pages
     )
 
-
+# Route pour supprimer un fournisseur (POST) par son ID
 @app.route('/delete-supplier/<int:supplier_id>', methods=['POST'])
 def delete_supplier(supplier_id):
     supplier = Supplier.query.get_or_404(supplier_id)
 
-    # Vérifie si le supplier est référencé dans SupplierPrice ou QuoteSupplierInfo
+    # Vérifie si le fournisseur est lié à des prix fournisseurs ou des infos devis fournisseurs
     supplier_price_links = SupplierPrice.query.filter_by(supplier_id=supplier_id).all()
     quote_supplier_info_links = QuoteSupplierInfo.query.filter_by(supplier_id=supplier_id).all()
 
     if supplier_price_links or quote_supplier_info_links:
-        # Récupère les numéros de devis concernés
+        # Récupère les IDs des devis concernés par ces liens
         quote_ids = {link.quote_line.quote_id for link in supplier_price_links}
         quote_ids.update(link.quote_id for link in quote_supplier_info_links)
+
+        # Recherche les devis à partir des IDs
         quotes = Quote.query.filter(Quote.id.in_(quote_ids)).all()
         quote_numbers = [quote.quote_number for quote in quotes]
         quote_list = ', '.join(quote_numbers)
-        flash(f"Vous ne pouvez pas supprimer ce fournisseur car il est utilisé dans les devis suivants : {quote_list}",
-              'danger')
+
+        # Empêche la suppression et affiche un message d’erreur avec les devis concernés
+        flash(f"Vous ne pouvez pas supprimer ce fournisseur car il est utilisé dans les devis suivants : {quote_list}", 'danger')
         return redirect(url_for('list_suppliers'))
 
-    # Suppression possible
+    # Si pas de liens, suppression du fournisseur possible
     db.session.delete(supplier)
     db.session.commit()
     flash('Fournisseur supprimé avec succès.', 'success')
@@ -282,34 +311,42 @@ def create_quote():
                     supplier_ids.append(sid)
 
         for i in range(len(supplier_refs)):
+            # Calcul du recommended_price (exemple ici : premier discount_percent non vide trouvé)
+            recommended_price = 0.0
+            for sid in supplier_ids:
+                discount_percents = request.form.getlist(f"supplier_discount_percent_{sid}[]")
+                if i < len(discount_percents) and discount_percents[i]:
+                    try:
+                        recommended_price = float(discount_percents[i])
+                        break
+                    except ValueError:
+                        pass
+
             line = QuoteLine(
                 quote_id=quote.id,
                 supplier_ref=supplier_refs[i],
                 description=descriptions[i],
                 quantity=int(quantities[i]),
-                client_price=float(client_prices[i])
+                client_price=float(client_prices[i]),
+                recommended_price=recommended_price
             )
             db.session.add(line)
             db.session.flush()
 
             for sid in supplier_ids:
                 prices = request.form.getlist(f"supplier_price_{sid}[]")
-                if i < len(prices):
-                    # Récupère les champs de remise pour ce fournisseur
-                    discount_percents = request.form.getlist(f"supplier_discount_percent_{sid}[]")
-                    discount_amounts = request.form.getlist(f"supplier_discount_amount_{sid}[]")
+                discount_percents = request.form.getlist(f"supplier_discount_percent_{sid}[]")
+                discount_amounts = request.form.getlist(f"supplier_discount_amount_{sid}[]")
 
+                if i < len(prices):
                     db.session.add(SupplierPrice(
                         quote_line_id=line.id,
                         supplier_id=sid,
                         price=float(prices[i]),
-                        recommended_price=float(discount_percents[i]) if i < len(discount_percents) and
-                                                                         discount_percents[i] else 0.0,
-                        discount_percent=float(discount_percents[i]) if i < len(discount_percents) and
-                                                                        discount_percents[i] else 0.0,
-                        discount_amount=float(discount_amounts[i]) if i < len(discount_amounts) and discount_amounts[
-                            i] else 0.0
+                        discount_percent=float(discount_percents[i]) if i < len(discount_percents) and discount_percents[i] else 0.0,
+                        discount_amount=float(discount_amounts[i]) if i < len(discount_amounts) and discount_amounts[i] else 0.0
                     ))
+
 
         for sid in supplier_ids:
             delay = request.form.get(f"delivery_delay_{sid}")
@@ -345,6 +382,7 @@ def create_quote():
         selected_client_id=selected_client_id
     )
 
+# Route de recherche
 @app.route('/search_quotes')
 def search_quotes():
     query = request.args.get('q', '').strip().lower()
@@ -361,13 +399,22 @@ def search_quotes():
                     func.lower(Client.last_name).like(f"%{query}%"),
                     func.lower(Client.company).like(f"%{query}%"),
                     func.lower(QuoteLine.description).like(f"%{query}%"),
-                    func.cast(Quote.creation_date, db.String).like(f"%{query}%"),
+                    cast(Quote.creation_date, String).like(f"%{query}%"),
                 )
             ).all()
     else:
-        results = Quote.query.options(joinedload(Quote.client), joinedload(Quote.lines)).all()
+        results = Quote.query \
+            .options(joinedload(Quote.client), joinedload(Quote.lines)) \
+            .all()
 
-    return render_template('partials/quote_items.html', quotes=results)
+    suivi_map = get_suivi_map(results)
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # Si c'est une requête AJAX, on renvoie juste le tableau mis à jour
+        return render_template('partials/quote_table.html', quotes=results, suivi_map=suivi_map)
+    else:
+        # Sinon, tu peux renvoyer la page complète ou la même chose (à adapter si besoin)
+        return render_template('partials/quote_table.html', quotes=results, suivi_map=suivi_map)
 
 
 @app.route('/update_quote/<int:quote_id>', methods=['GET', 'POST'])
@@ -403,6 +450,7 @@ def update_quote(quote_id):
                         line.quantity = int(quantities[i])
                         line.client_price = float(client_prices[i])
                         line.supplier_ref = supplier_refs[i]
+                        line.recommended_price = float(request.form.getlist("recommended_price[]")[i])
                 else:
                     # Nouvelle ligne
                     new_line = QuoteLine(
@@ -410,7 +458,9 @@ def update_quote(quote_id):
                         description=descriptions[i],
                         quantity=int(quantities[i]),
                         client_price=float(client_prices[i]),
-                        supplier_ref=supplier_refs[i]
+                        supplier_ref=supplier_refs[i],
+                        recommended_price=float(request.form.getlist("recommended_price[]")[i])
+
                     )
                     db.session.add(new_line)
 
@@ -451,7 +501,6 @@ def update_quote(quote_id):
                     db.session.add(new_sp)
 
             # Mise à jour des QuoteSupplierInfo
-            # Par exemple, pour chaque fournisseur lié au devis
             qsi_ids = request.form.getlist('qsi_id[]')
             qsi_supplier_ids = request.form.getlist('qsi_supplier_id[]')
             qsi_delays = request.form.getlist('qsi_delivery_delay[]')
@@ -459,14 +508,16 @@ def update_quote(quote_id):
 
             existing_qsi = {info.id: info for info in quote.supplier_info}
 
-            for i, qsi_id in enumerate(qsi_ids):
-                if qsi_id.isdigit():
-                    info = existing_qsi.get(int(qsi_id))
+            for i in range(len(qsi_supplier_ids)):
+                try:
+                    info_id = int(qsi_ids[i])
+                    info = existing_qsi.get(info_id)
                     if info:
                         info.supplier_id = qsi_supplier_ids[i]
                         info.delivery_delay = int(qsi_delays[i]) if qsi_delays[i] else None
                         info.delivery_fee = float(qsi_fees[i]) if qsi_fees[i] else None
-                else:
+                except (ValueError, TypeError):
+                    # Si qsi_id est vide ou invalide, on crée une nouvelle info
                     new_info = QuoteSupplierInfo(
                         quote_id=quote.id,
                         supplier_id=qsi_supplier_ids[i],
@@ -475,6 +526,9 @@ def update_quote(quote_id):
                     )
                     db.session.add(new_info)
 
+            print("=== Infos fournisseur ===")
+            for info in quote.supplier_info:
+                print(info.id, info.supplier_id, info.delivery_delay, info.delivery_fee)            
             db.session.commit()
             flash('Devis mis à jour avec succès.', 'success')
             return redirect(url_for('show_quote', quote_id=quote.id))
@@ -665,148 +719,153 @@ def register():
 
 @app.route('/edit_quote/<int:quote_id>', methods=['GET', 'POST'])
 def edit_quote(quote_id):
-    quote = Quote.query.get_or_404(quote_id)
+    quote = Quote.query.options(
+        joinedload(Quote.lines).joinedload(QuoteLine.supplier_prices),
+        joinedload(Quote.supplier_info)
+    ).get_or_404(quote_id)
 
     if request.method == 'POST':
-        # Mise à jour des données du devis (Quote)
-        quote_number = request.form.get('quote_number')
-        creation_date_str = request.form.get('creation_date')
-        client_id = request.form.get('client_id')
-        delivery_location = request.form.get('delivery_location')
+        quote.creation_date = datetime.strptime(request.form['creation_date'], "%d/%m/%Y").date()
+        quote.client_id = int(request.form['client_id'])
+        quote.delivery_location = request.form['delivery_location']
 
-        if creation_date_str:
-            try:
-                quote.creation_date = datetime.strptime(creation_date_str, "%d-%m-%Y").date()
-            except ValueError:
-                pass  # gérer l'erreur selon besoin
+        # --- LIGNES ---
+        posted_line_ids = [int(x) for x in request.form.getlist('line_id[]') if x]
+        existing_line_ids = {line.id for line in quote.lines}
 
-        quote.quote_number = quote_number or quote.quote_number
-        quote.client_id = int(client_id) if client_id else quote.client_id
-        quote.delivery_location = delivery_location or quote.delivery_location
-
-        # Gestion des lignes (QuoteLine)
-        # On récupère la liste des ids des lignes existantes soumises
-        submitted_line_ids = request.form.getlist('quote_line_id[]')  # ids existantes + '' pour nouvelles
-
-        # Pour garder trace des lignes à garder
-        current_line_ids = set()
-
-        for i, line_id in enumerate(submitted_line_ids):
-            line_id = line_id.strip()
-            supplier_ref = request.form.getlist('supplier_ref[]')[i]
-            description = request.form.getlist('description[]')[i]
-            quantity = request.form.getlist('quantity[]')[i]
-            client_price = request.form.getlist('client_price[]')[i]
-
-            if line_id:  # Ligne existante -> mise à jour
-                line = QuoteLine.query.filter_by(id=int(line_id), quote_id=quote.id).first()
-                if line:
-                    # Si on a un champ pour suppression, gérer ici (exemple : checkbox 'delete_line_<id>')
-                    if request.form.get(f'delete_line_{line_id}') == 'on':
-                        # Suppression cascade des SupplierPrices liés
-                        SupplierPrice.query.filter_by(quote_line_id=line.id).delete()
-                        db.session.delete(line)
-                        continue  # passe à la ligne suivante
-
-                    # Mise à jour de la ligne
-                    line.supplier_ref = supplier_ref
-                    line.description = description
-                    line.quantity = int(quantity) if quantity.isdigit() else 0
-                    line.client_price = float(client_price) if client_price else 0.0
-                    current_line_ids.add(line.id)
-
-            else:
-                # Nouvelle ligne -> création
-                new_line = QuoteLine(
-                    quote_id=quote.id,
-                    supplier_ref=supplier_ref,
-                    description=description,
-                    quantity=int(quantity) if quantity.isdigit() else 0,
-                    client_price=float(client_price) if client_price else 0.0
-                )
-                db.session.add(new_line)
-                db.session.flush()  # flush pour avoir new_line.id
-
-                current_line_ids.add(new_line.id)
-
-            # Gestion des SupplierPrice par ligne
-            # On peut avoir un système similaire pour gérer les prix par fournisseur sur chaque ligne
-            supplier_ids = request.form.getlist('supplier_ids[]')  # Liste de fournisseurs visibles dans le formulaire
-
-            for sid in supplier_ids:
-                price_key = f'supplier_price_{sid}[]'
-                discount_percent_key = f'supplier_discount_percent_{sid}[]'
-                discount_amount_key = f'supplier_discount_amount_{sid}[]'
-
-                prices = request.form.getlist(price_key)
-                discount_percents = request.form.getlist(discount_percent_key)
-                discount_amounts = request.form.getlist(discount_amount_key)
-
-                # Correspondance index i dans listes des lignes
-                if i < len(prices):
-                    price_str = prices[i]
-                    discount_percent_str = discount_percents[i] if i < len(discount_percents) else '0'
-                    discount_amount_str = discount_amounts[i] if i < len(discount_amounts) else '0'
-
-                    # Trouver SupplierPrice existante ou créer nouvelle
-                    sp = SupplierPrice.query.filter_by(
-                        quote_line_id=line.id if line_id else new_line.id,
-                        supplier_id=sid
-                    ).first()
-
-                    if sp is None:
-                        sp = SupplierPrice(
-                            quote_line_id=line.id if line_id else new_line.id,
-                            supplier_id=sid
-                        )
-                        db.session.add(sp)
-
-                    sp.price = float(price_str) if price_str else 0.0
-                    sp.discount_percent = float(discount_percent_str) if discount_percent_str else 0.0
-                    sp.discount_amount = float(discount_amount_str) if discount_amount_str else 0.0
-
-        # Supprimer les lignes supprimées (non soumises)
-        all_line_ids_in_db = {line.id for line in quote.lines}
-        to_delete = all_line_ids_in_db - current_line_ids
-        for line_id in to_delete:
-            line = QuoteLine.query.get(line_id)
-            if line:
-                # Suppression des SupplierPrice liés
-                SupplierPrice.query.filter_by(quote_line_id=line.id).delete()
+        # Supprimer les lignes retirées
+        for line in quote.lines[:]:
+            if line.id not in posted_line_ids:
                 db.session.delete(line)
 
-        # Gestion QuoteSupplierInfo (infos fournisseurs devis)
-        supplier_ids = request.form.getlist('supplier_ids[]')
-        for sid in supplier_ids:
-            delay = request.form.get(f'delivery_delay_{sid}')
-            fee = request.form.get(f'delivery_fee_{sid}')
+        # Mettre à jour ou créer les lignes
+        refs = request.form.getlist("supplier_ref[]")
+        descs = request.form.getlist("description[]")
+        qtys = request.form.getlist("quantity[]")
+        cprices = request.form.getlist("client_price[]")
+        pvcs = request.form.getlist("recommended_price[]")
 
-            qsi = QuoteSupplierInfo.query.filter_by(quote_id=quote.id, supplier_id=sid).first()
-            if qsi is None:
-                qsi = QuoteSupplierInfo(quote_id=quote.id, supplier_id=sid)
-                db.session.add(qsi)
+        line_id_list = request.form.getlist('line_id[]')
+        for i, ref in enumerate(refs):
+            line_id = int(line_id_list[i]) if i < len(line_id_list) and line_id_list[i] else None
+            if line_id:
+                line = QuoteLine.query.get(line_id)
+            else:
+                line = QuoteLine(quote_id=quote.id)
+                db.session.add(line)
 
-            qsi.delivery_delay = int(delay) if delay and delay.isdigit() else None
-            qsi.delivery_fee = float(fee) if fee else None
+            line.supplier_ref = ref
+            line.description = descs[i]
+            line.quantity = int(qtys[i])
+            line.client_price = float(cprices[i])
+            line.recommended_price = float(pvcs[i] or 0)
+
+            # --- SUPPLIER PRICES ---
+            supplier_ids = [k.replace("supplier_price_", "").replace("[]", "")
+                            for k in request.form if k.startswith("supplier_price_")]
+
+            for sid in supplier_ids:
+                price_list = request.form.getlist(f"supplier_price_{sid}[]")
+                dp_list = request.form.getlist(f"supplier_discount_percent_{sid}[]")
+                da_list = request.form.getlist(f"supplier_discount_amount_{sid}[]")
+                date_list = request.form.getlist(f"supplier_date_validate_promo_{sid}[]")
+                qtt_list = request.form.getlist(f"supplier_qtt_stock_{sid}[]")
+
+                if i < len(price_list):
+                    sp = SupplierPrice.query.filter_by(quote_line_id=line.id, supplier_id=sid).first()
+                    if not sp:
+                        sp = SupplierPrice(quote_line_id=line.id, supplier_id=sid)
+                        db.session.add(sp)
+
+                    sp.price = float(price_list[i])
+                    sp.discount_percent = float(dp_list[i] or 0)
+                    sp.discount_amount = float(da_list[i] or 0)
+                    sp.date_validate_promo = datetime.strptime(date_list[i], "%Y-%m-%d").date() if date_list[i] else None
+                    sp.qtt_stock = int(qtt_list[i]) if qtt_list[i] else None
+
+        # SUPPRIMER LES SupplierPrices si ligne supprimée ou fournisseur supprimé
+        posted_supplier_ids = [k.replace("delivery_delay_", "") for k in request.form if k.startswith("delivery_delay_")]
+        SupplierPrice.query.filter(SupplierPrice.quote_line_id.in_(existing_line_ids), ~SupplierPrice.supplier_id.in_(posted_supplier_ids)).delete(synchronize_session=False)
+
+        # --- INFOS FOURNISSEUR ---
+        existing_infos = {info.supplier_id: info for info in quote.supplier_info}
+        form_supplier_ids = set(posted_supplier_ids)
+
+        # Supprimer ceux retirés
+        for sid in list(existing_infos):
+            if sid not in form_supplier_ids:
+                db.session.delete(existing_infos[sid])
+
+        # Ajouter / Mettre à jour ceux du formulaire
+        for sid in form_supplier_ids:
+            delay = request.form.get(f"delivery_delay_{sid}")
+            fee = request.form.get(f"delivery_fee_{sid}")
+
+            info = existing_infos.get(sid)
+            if not info:
+                info = QuoteSupplierInfo(quote_id=quote.id, supplier_id=sid)
+                db.session.add(info)
+
+            info.delivery_delay = int(delay or 0)
+            info.delivery_fee = float(fee or 0)
 
         db.session.commit()
-        flash("Devis mis à jour avec succès.", "success")
+        flash("Devis mis à jour.", "success")
         return redirect(url_for('quote_detail', quote_id=quote.id))
 
-    # GET : afficher formulaire avec données existantes
+    # --- GET ---
     clients = Client.query.all()
     suppliers = Supplier.query.all()
 
-    # Récupérer les infos QuoteSupplierInfo existantes pour pré-remplir
-    quote_supplier_info = {qsi.supplier_id: qsi for qsi in quote.supplier_info}
-
-    return render_template(
-        'edit_quote.html',
-        quote=quote,
-        clients=clients,
-        suppliers=suppliers,
-        quote_supplier_info=quote_supplier_info
+    used_suppliers = (
+        db.session.query(Supplier)
+        .filter(Supplier.code.in_({sp.supplier_id for sp in SupplierPrice.query
+                                   .join(QuoteLine, SupplierPrice.quote_line_id==QuoteLine.id)
+                                   .filter(QuoteLine.quote_id==quote.id)}))
+        .all()
     )
+    initial_suppliers = [{'id': s.code, 'name': s.company} for s in used_suppliers]
+
+    initial_lines = []
+    for l in quote.lines:
+        initial_lines.append({
+            'id': l.id,
+            'supplier_ref': l.supplier_ref,
+            'description': l.description,
+            'quantity': l.quantity,
+            'client_price': l.client_price,
+            'recommended_price': l.recommended_price or 0,
+            'supplier_prices': [
+                {
+                    'supplier_id': sp.supplier_id,
+                    'price': sp.price,
+                    'discount_percent': sp.discount_percent,
+                    'discount_amount': sp.discount_amount,
+                    'date_validate_promo': sp.date_validate_promo.isoformat() if sp.date_validate_promo else '',
+                    'qtt_stock': sp.qtt_stock
+                } for sp in l.supplier_prices
+            ]
+        })
+
+    initial_infos = [
+        {
+            'id': i.id,
+            'supplier_id': i.supplier_id,
+            'delivery_delay': i.delivery_delay,
+            'delivery_fee': i.delivery_fee
+        } for i in quote.supplier_info
+    ]
+
+    return render_template('edit_quote.html',
+                           quote=quote,
+                           clients=clients,
+                           suppliers=suppliers,
+                           initial_suppliers=initial_suppliers,
+                           initial_lines=initial_lines,
+                           initial_infos=initial_infos)
+
+
+
 
 @app.route('/quotes/<int:quote_id>/update_supplier_info', methods=['POST'])
 def update_supplier_info(quote_id):
