@@ -1,76 +1,72 @@
-<!-- templates/edit_client.html -->
-
 {% extends 'base.html' %}
 
 {% block title %}Modifier Client{% endblock %}
 
 {% block content %}
 
-<div class="container mt-5">
-    <h1 class="mb-4">Modifier le client</h1>
+<h1 class="mb-4">Modifier le client</h1>
 
-    <form method="POST">
-        <div class="mb-3">
-            <label for="code" class="form-label">Code Client</label>
-            <input type="text" class="form-control" id="code" name="code" value="{{ client.code }}" required>
-        </div>
+<form method="POST">
+    <div class="mb-3">
+        <label for="code" class="form-label">Code Client</label>
+        <input type="text" class="form-control" id="code" name="code" value="{{ client.code }}" required>
+    </div>
 
-        <div class="mb-3">
-            <label for="civility" class="form-label">Civilité</label>
-            <select class="form-select" id="civility" name="civility">
-                <option value="M." {% if client.civility == 'M.' %}selected{% endif %}>M.</option>
-                <option value="Mme" {% if client.civility == 'Mme' %}selected{% endif %}>Mme</option>
-            </select>
-        </div>
+    <div class="mb-3">
+        <label for="civility" class="form-label">Civilité</label>
+        <select class="form-select" id="civility" name="civility">
+            <option value="M." {% if client.civility == 'M.' %}selected{% endif %}>M.</option>
+            <option value="Mme" {% if client.civility == 'Mme' %}selected{% endif %}>Mme</option>
+        </select>
+    </div>
 
-        <div class="mb-3">
-            <label for="last_name" class="form-label">Nom</label>
-            <input type="text" class="form-control" id="last_name" name="last_name" value="{{ client.last_name }}" required>
-        </div>
+    <div class="mb-3">
+        <label for="last_name" class="form-label">Nom</label>
+        <input type="text" class="form-control" id="last_name" name="last_name" value="{{ client.last_name }}" required>
+    </div>
 
-        <div class="mb-3">
-            <label for="first_name" class="form-label">Prénom</label>
-            <input type="text" class="form-control" id="first_name" name="first_name" value="{{ client.first_name }}" required>
-        </div>
+    <div class="mb-3">
+        <label for="first_name" class="form-label">Prénom</label>
+        <input type="text" class="form-control" id="first_name" name="first_name" value="{{ client.first_name }}" required>
+    </div>
 
-        <div class="mb-3">
-            <label for="email" class="form-label">Adresse Email</label>
-            <input type="email" class="form-control" id="email" name="email" value="{{ client.email }}">
-        </div>
+    <div class="mb-3">
+        <label for="email" class="form-label">Adresse Email</label>
+        <input type="email" class="form-control" id="email" name="email" value="{{ client.email }}">
+    </div>
 
-        <div class="mb-3">
-            <label for="job" class="form-label">Poste</label>
-            <input type="text" class="form-control" id="job" name="job" value="{{ client.job }}">
-        </div>
+    <div class="mb-3">
+        <label for="job" class="form-label">Poste</label>
+        <input type="text" class="form-control" id="job" name="job" value="{{ client.job }}">
+    </div>
 
-        <div class="mb-3">
-            <label for="company" class="form-label">Entreprise</label>
-            <input type="text" class="form-control" id="company" name="company" value="{{ client.company }}">
-        </div>
+    <div class="mb-3">
+        <label for="company" class="form-label">Entreprise</label>
+        <input type="text" class="form-control" id="company" name="company" value="{{ client.company }}">
+    </div>
 
-        <div class="mb-3">
-            <label for="address" class="form-label">Adresse</label>
-            <input type="text" class="form-control" id="address" name="address" value="{{ client.address }}">
-        </div>
+    <div class="mb-3">
+        <label for="address" class="form-label">Adresse livraison</label>
+        <input type="text" class="form-control" id="address" name="address" value="{{ client.address }}">
+    </div>
 
-        <div class="mb-3">
-            <label for="city" class="form-label">Ville</label>
-            <input type="text" class="form-control" id="city" name="city" value="{{ client.city }}">
-        </div>
+    <div class="mb-3">
+        <label for="registred_office" class="form-label">Siège social</label>
+        <input type="text" class="form-control" id="registred_office" name="registred_office" value="{{ client.registred_office }}">
+    </div>
 
-        <div class="mb-3">
-            <label for="phone" class="form-label">Téléphone</label>
-            <input type="text" class="form-control" id="phone" name="phone" value="{{ client.phone }}">
-        </div>
+    <div class="mb-3">
+        <label for="phone" class="form-label">Téléphone</label>
+        <input type="text" class="form-control" id="phone" name="phone" value="{{ client.phone }}">
+    </div>
 
-        <div class="mb-3">
-            <label for="mobile" class="form-label">Mobile</label>
-            <input type="text" class="form-control" id="mobile" name="mobile" value="{{ client.mobile }}">
-        </div>
+    <div class="mb-3">
+        <label for="mobile" class="form-label">Mobile</label>
+        <input type="text" class="form-control" id="mobile" name="mobile" value="{{ client.mobile }}">
+    </div>
 
-        <button type="submit" class="btn btn-primary">Enregistrer les modifications</button>
-        <a href="{{ url_for('list_clients') }}" class="btn btn-secondary">Annuler</a>
-    </form>
+    <button type="submit" class="btn btn-primary">Enregistrer les modifications</button>
+    <a href="{{ url_for('list_clients') }}" class="btn btn-secondary">Annuler</a>
+</form>
 
-</div>
 {% endblock %}

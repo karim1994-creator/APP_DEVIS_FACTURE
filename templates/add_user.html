@@ -1,17 +1,19 @@
-{% extends "base_out.html" %}
-{% block title %}Inscription{% endblock %}
+{% extends "base.html" %}
+{% block title %}Ajouter un utilisateur{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
     <div class="row justify-content-center">
-        <div class="col-md-4">
+        <div class="col-md-5">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h3 class="card-title text-center mb-4">Inscription</h3>
+                    <h3 class="card-title text-center mb-4">Ajouter un utilisateur</h3>
 
-                    {% with messages = get_flashed_messages() %}
+                    {% with messages = get_flashed_messages(with_categories=true) %}
                       {% if messages %}
-                        <div class="alert alert-danger">{{ messages[0] }}</div>
+                        {% for category, msg in messages %}
+                          <div class="alert alert-{{ category }}">{{ msg }}</div>
+                        {% endfor %}
                       {% endif %}
                     {% endwith %}
 
@@ -37,14 +39,14 @@
                         </div>
 
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-success">S'inscrire</button>
+                            <button type="submit" class="btn btn-primary">Ajouter</button>
                         </div>
                     </form>
                 </div>
             </div>
 
             <p class="text-center mt-3">
-                <a href="{{ url_for('login') }}">Déjà un compte ? Connectez-vous</a>
+                <a href="{{ url_for('admin_users') }}">⬅ Retour à l’espace admin</a>
             </p>
         </div>
     </div>

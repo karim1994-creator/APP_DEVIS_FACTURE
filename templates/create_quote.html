@@ -68,20 +68,31 @@
 <h1>Créer un devis</h1>
 
 <form method="POST" action="/create_quote">
-<input type="hidden" name="quote_number" id="quote_number" value="{{ quote_number }}">
+<label for="quote_mode" style="background-color: #FFD580;">Numéro de devis :</label>
+<select id="quote_mode" onchange="toggleQuoteNumberInput()" style="width: auto; display: inline-block;">
+    <option value="auto" selected>-- Auto --</option>
+    <option value="manual">-- Saisi --</option>
+</select>
+
+<input type="text" name="quote_number" id="quote_number_input" value="{{ quote_number }}" readonly style="width: 250px; display: inline-block; margin-left: 10px;">
+<br><br>
+
 
 <label for="creation_date" style="background-color: #FFD580;">Date de création :</label>
 <input type="text" name="creation_date" id="creation_date" readonly><br><br>
 
-<label for="client_id" style="background-color: #FFD580;">Client :</label>
-<select name="client_id" id="client_id" required onchange="updateDeliveryLocation()">
+<label for="client_code" style="background-color: #FFD580;">Client :</label>
+<select name="client_code" id="client_code" required onchange="updateDeliveryLocation()">
     {% for client in clients %}
-        <option value="{{ client.id }}" data-address="{{ client.address }}"
-            {% if client.id == selected_client_id %}selected{% endif %}>
+        <option value="{{ client.code }}" 
+            data-address="{{ client.address or '' }}" 
+            data-registred_office="{{ client.registred_office or '' }}"
+            {% if client.code == selected_client_code %}selected{% endif %}>
             {{ client.code }} : {{ client.company }}
         </option>
     {% endfor %}
 </select><br><br>
+
 
 <label for="delivery_location" style="background-color: #FFD580;">Lieu de livraison :</label>
 <select name="delivery_location" id="delivery_location"></select><br><br>
@@ -101,29 +112,32 @@
 </select>
 <button type="button" onclick="removeSelectedSupplier()">Supprimer le fournisseur</button><br><br>
 
-<table id="quote_table">
-    <thead>
-        <tr id="header_row">
-    <th class="blue-column">Réf. Fourn.</th>
-    <th class="move-column">Désignation</th>
-    <th class="blue-column">Quantité</th>
-	<th class="move-column">Prix de vente conseillé</th>
-    <th class="client-price-column" style="background-color: #cce5ff;">Prix de vente client</th>
-    <th style="background-color: #FFD580;">Marge (€ / %)</th> 
-    <th>Supprimer</th>
-</tr>
-
-    </thead>
-    <tbody id="table_body"></tbody>
-    <tfoot>
-        <tr id="totals_row">
-            <td colspan="3" style="font-weight: bold;">Totaux Fournisseurs</td>
-			<td id="total_pvc" class="total-cell"></td> <!-- AJOUT -->
-            <td id="total_vente_client" class="total-cell"></td>
-            <td id="total_marge" class="total-cell"></td>
-        </tr>
-    </tfoot>
-</table>
+<!-- Conteneur scroll horizontal -->
+<div style="overflow-x: auto; width: 100%;">
+    <table id="quote_table" style="min-width: 1200px; border-collapse: collapse;">
+        <thead>
+            <tr id="header_row">
+                <th class="blue-column">Réf. Fourn.</th>
+                <th class="move-column">Désignation</th>
+                <th class="blue-column">Quantité</th>
+                <th class="client-pvc-column" style="background-color: #E0BBE4;">Prix de vente conseillé</th>
+				<th style="background-color: #cce5ff;">Prix de vente client</th>
+                <th style="background-color: #FFD580;">Marge (€ / %)</th> 
+                <th>Supprimer</th>
+            </tr>
+        </thead>
+        <tbody id="table_body"></tbody>
+        <tfoot>
+            <tr id="totals_row">
+                <td colspan="3" style="font-weight: bold;">Totaux Fournisseurs</td>
+                <!-- Ici seront insérés dynamiquement les totaux fournisseurs -->
+                <td id="total_pvc" class="total-cell"></td>
+                <td id="total_vente_client" class="total-cell"></td>
+                <td id="total_marge" class="total-cell"></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
 <button type="button" onclick="addRow()">Ajouter une ligne</button><br><br>
 <label for="selected_supplier_margin">Calculer la marge pour :</label>
 <select id="selected_supplier_margin" onchange="updateTotals()">
@@ -148,19 +162,87 @@
     <input type="submit" class="action-button" value="Créer le devis">
 </div>
 
-<div class="action-column">
-    <button type="button" class="action-button" onclick="askQuotation()">Demander cotation</button><br>
-    <button type="button" class="action-button" onclick="createWord()">Créer un fichier Word</button><br>
-    <button type="button" class="action-button" onclick="exportEvoliz()">Exporter vers Evoliz</button>
-</div>
 </form>
 
 <script>
+{#
+    Script JavaScript pour la gestion dynamique du formulaire de création de devis
+
+    1. Gestion des fournisseurs sélectionnés
+       - selectedSuppliers : tableau global contenant les fournisseurs ajoutés
+       - addSupplierColumn() / addSupplierColumnById(id, name) :
+           * Ajoute une colonne pour un fournisseur sélectionné
+           * Crée les champs prix, remises (% et €), date de validité promo, quantité en stock
+           * Met à jour le header et le footer (totaux)
+           * Ajoute une ligne dans le tableau "Informations Livraison Fournisseurs"
+       - removeSupplier(id) :
+           * Supprime un fournisseur et toutes ses colonnes associées
+           * Met à jour le tableau et le select de suppression
+       - updateSupplierRemoveSelect() :
+           * Met à jour le select pour choisir un fournisseur à supprimer
+       - removeSelectedSupplier() : supprime le fournisseur sélectionné dans le select
+       - getSupplierNameById(id) : retourne le nom d’un fournisseur depuis son ID
+
+    2. Gestion des lignes de devis
+       - addRow() : ajoute dynamiquement une ligne de produit avec :
+           * Référence fournisseur, désignation, quantité
+           * Prix conseillé et prix client
+           * Colonnes pour chaque fournisseur sélectionné (prix + remises + stock + date promo)
+           * Cellule de marge
+           * Bouton pour supprimer la ligne
+       - deleteRow(button) : supprime une ligne et met à jour les totaux
+       - rebuildTable() : permet de reconstruire le tableau si nécessaire (après suppression de colonnes)
+
+    3. Gestion des lieux de livraison
+       - updateDeliveryLocation() :
+           * Met à jour le select "Lieu de livraison" selon le client choisi
+           * Inclut adresse principale, siège enregistré, et option par défaut "Linas"
+
+    4. Calcul des totaux et marges
+       - updateTotals() :
+           * Calcule les totaux pour chaque fournisseur (prix après remises + frais de livraison)
+           * Calcule les totaux PVC, prix client et marge (€ / %)
+           * Met à jour les cellules de marge et les totaux dans le footer
+           * Appelle highlightBestPriceSupplier() et highlightBestDelivery() pour surligner les meilleures offres
+
+    5. Surlignage des meilleures offres
+       - highlightBestPriceSupplier() :
+           * Identifie le fournisseur avec le prix total le plus bas
+           * Surligne ses cellules et sa cellule total en vert
+           * Supprime le surlignage pour les autres fournisseurs
+       - highlightBestDelivery() :
+           * Surligne en vert la ligne correspondante dans le tableau "Informations Livraison Fournisseurs"
+           * Basé sur le fournisseur ayant le prix total le plus bas
+
+    6. Navigation au clavier
+       - Permet de passer automatiquement à l’input suivant dans un tbody en appuyant sur Entrée
+       - Appliqué sur :
+           * Le tableau principal (table_body)
+           * Le tableau "Livraison Fournisseurs" (supplier_info_body)
+       - Les changements sur les frais de livraison déclenchent updateTotals() pour recalculer les totaux
+
+    7. Gestion du numéro de devis
+       - toggleQuoteNumberInput() :
+           * Mode "auto" : champ en lecture seule, valeur générée automatiquement
+           * Mode "manual" : champ editable et vide, prêt à être rempli par l’utilisateur
+
+    8. Fonctions d’export (placeholders)
+       - createWord() : fonction à implémenter pour créer un fichier Word
+       - exportEvoliz() : fonction à implémenter pour exporter vers Evoliz
+
+    9. Initialisation au chargement de la page
+       - updateDeliveryLocation() : met à jour le lieu de livraison selon le client par défaut
+       - addRow() : ajoute une première ligne de devis
+       - updateTotals() : calcule les totaux initiaux
+       - Définit la date de création au format JJ/MM/AAAA
+#}
+
 let selectedSuppliers = [];
 
 function updateDeliveryLocation() {
-    const clientSelect = document.getElementById('client_id');
+    const clientSelect = document.getElementById('client_code');
     const address = clientSelect.options[clientSelect.selectedIndex]?.dataset.address || '';
+	const registred_office = clientSelect.options[clientSelect.selectedIndex]?.dataset.registred_office || '';
     const deliverySelect = document.getElementById('delivery_location');
     deliverySelect.innerHTML = '';
 
@@ -170,11 +252,16 @@ function updateDeliveryLocation() {
         option1.textContent = address;
         deliverySelect.appendChild(option1);
     }
-
-    const option2 = document.createElement('option');
-    option2.value = 'Linas';
-    option2.textContent = 'Linas';
-    deliverySelect.appendChild(option2);
+    if (registred_office) {
+        const option2 = document.createElement('option');
+        option2.value = registred_office;
+        option2.textContent = registred_office;
+        deliverySelect.appendChild(option2);
+    }
+    const option3 = document.createElement('option');
+    option3.value = 'Linas';
+    option3.textContent = 'Linas';
+    deliverySelect.appendChild(option3);
 
     deliverySelect.value = address;
 }
@@ -188,44 +275,50 @@ function addRow() {
     <div style="overflow-x: auto; min-width: 220px; max-width: 250px; display: block;">
         <div style="display: flex; flex-direction: column;">
 
-                <input type="number" name="supplier_price_${s.id}[]" step="0.01" placeholder="Prix €" value="0.00" oninput="updateTotals()">
-                <div style="display: flex; gap: 2px; margin-top: 2px;">
-                    <input type="number" name="supplier_discount_percent_${s.id}[]" step="0.01" placeholder="Remise %" style="width:50%;" oninput="updateTotals()">
-                    <input type="number" name="supplier_discount_amount_${s.id}[]" step="0.01" placeholder="Remise €" style="width:50%;" oninput="updateTotals()">
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
-                    <div style="display: flex; align-items: center;">
-                        <span style="font-size: 11px; font-weight: 500; white-space: nowrap;">Prix valable jusqu'au :</span>
-                        <input type="date" name="supplier_date_validate_promo_${s.id}[]" placeholder="Date promo" style="margin-left: auto; width: 50%;">
-                    </div>
-					
-				    <div style="display: flex; align-items: center;">
-                        <span style="font-size: 11px; font-weight: 500; white-space: nowrap;">Quantité en stock :</span>
-						<input type="number" name="supplier_qtt_stock_${s.id}[]" placeholder="Qté stock" style="margin-left: auto; width: 50%;">
-                    </div>
-					
-                    
-                </div>
-                    </div>
-    </div>
-</td>
+            <!-- Prix fournisseur -->
+           Prix fournisseur: <input type="number" name="supplier_price_${s.id}[]" step="0.01" placeholder="Prix €" value="0.00" oninput="updateTotals()">
 
-        `;
+            
+            <!-- Remises -->
+            <div style="display: flex; gap: 2px; margin-top: 2px;">
+                <input type="number" name="supplier_discount_percent_${s.id}[]" step="0.01" placeholder="Remise %" style="width:50%;" oninput="updateTotals()">
+                <input type="number" name="supplier_discount_amount_${s.id}[]" step="0.01" placeholder="Remise €" style="width:50%;" oninput="updateTotals()">
+            </div>
+			
+            <!-- Prix net -->
+            Prix net: <input type="number" name="supplier_net_price_${s.id}[]" step="0.01" placeholder="Prix net €" value="0.00" readonly style="margin-top:2px; background-color: #FFD580;">
+
+            <!-- Date validité promo et quantité en stock -->
+            <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
+                <div style="display: flex; align-items: center;">
+                    <span style="font-size: 11px; font-weight: 500; white-space: nowrap;">Prix valable jusqu'au :</span>
+                    <input type="date" name="supplier_validity_date_${s.id}[]" style="margin-left: auto; width: 50%;" oninput="updateTotals()">
+                </div>
+                <div style="display: flex; align-items: center;">
+                    <span style="font-size: 11px; font-weight: 500; white-space: nowrap;">Quantité en stock :</span>
+                    <input type="number" name="supplier_stock_${s.id}[]" placeholder="Qté stock" style="margin-left: auto; width: 50%;" oninput="updateTotals()">
+                </div>
+            </div>
+
+        </div>
+    </div>
+</td>`;
     });
 
     tr.innerHTML = `
-        <td><input type="text" name="supplier_ref[]"></td>
-        <td><input type="text" name="description[]"></td>
+        <td><input type="text" name="supplier_ref[]"  style="width: 150px;"></td>
+        <td><textarea name="description[]" style="width:300px;height:80px;font-size:16px;padding:5px;" placeholder="Saisissez la description"></textarea></td>
         <td><input type="number" name="quantity[]" min="1" value="1" oninput="updateTotals()"></td>
-		<td><input type="number" name="recommended_price[]" step="0.01" placeholder="PVC €" oninput="updateTotals()"></td>
         ${supplierCells}
-		<td><input type="number" name="client_price[]" step="0.01" value="0.00" oninput="updateTotals()"></td>
-        <td class="marge-cell">0.00 € / 0.00 %</td>
+        <td><input type="number" name="recommended_price[]" step="0.01" placeholder="PVC €" value="0" oninput="updateTotals()"  style="width: 100px;"></td>
+        <td><input type="number" name="client_price[]" step="0.01" value="0" oninput="updateTotals()" style="width: 100px;"></td>
+        <td class="marge-cell" style="width: 150px;">0.00 € / 0.00 %</td>
         <td><button type="button" onclick="deleteRow(this)">🗑️</button></td>
     `;
     document.getElementById('table_body').appendChild(tr);
     updateTotals();
 }
+
 
 
 function addSupplierColumn() {
@@ -249,16 +342,16 @@ function addSupplierColumnById(id, name) {
     }
 
     const headerRow = document.getElementById('header_row');
-    const clientPriceTh = headerRow.querySelector('th.client-price-column');
+    const clientPriceTh = headerRow.querySelector('th.client-pvc-column');
 
     const newTh = document.createElement('th');
     newTh.setAttribute("colspan", "1");
-    newTh.innerHTML = `${name}<br><small>Prix + Remises</small>`;
+    newTh.innerHTML = `${name}<br><small>Prix + Remises </small>`;
     newTh.classList.add("move-header");
     headerRow.insertBefore(newTh, clientPriceTh);
 
     const totalRow = document.getElementById('totals_row');
-    const clientTotalCell = totalRow.querySelector('#total_vente_client');
+    const clientTotalCell = totalRow.querySelector('#total_pvc');
     const newTotalTd = document.createElement('td');
     newTotalTd.classList.add('total-cell');
     newTotalTd.id = `total_fournisseur_${id}`;
@@ -266,7 +359,7 @@ function addSupplierColumnById(id, name) {
 
     const rows = document.querySelectorAll('#table_body tr');
     rows.forEach(row => {
-        const clientInput = row.querySelector('input[name="client_price[]"]');
+        const pvcInput = row.querySelector('input[name="recommended_price[]"]');
         const newTd = document.createElement('td');
 
         const scroller = document.createElement('div');
@@ -277,26 +370,31 @@ function addSupplierColumnById(id, name) {
 
         scroller.innerHTML = `
             <div style="display: flex; flex-direction: column;">
-                <input type="number" name="supplier_price_${id}[]" step="0.01" placeholder="Prix €" value="0.00" oninput="updateTotals()">
+                <!-- Prix fournisseur -->
+                Prix fournisseur: <input type="number" name="supplier_price_${id}[]" step="0.01" placeholder="Prix €" value="0.00" oninput="updateTotals()">
+                
+                <!-- Remises -->
                 <div style="display: flex; gap: 2px; margin-top: 2px;">
                     <input type="number" name="supplier_discount_percent_${id}[]" step="0.01" placeholder="Remise %" style="width:50%;" oninput="updateTotals()">
                     <input type="number" name="supplier_discount_amount_${id}[]" step="0.01" placeholder="Remise €" style="width:50%;" oninput="updateTotals()">
                 </div>
+                <!-- Prix net -->
+                Prix net: <input type="number" name="supplier_net_price_${id}[]" step="0.01" placeholder="Prix net €" value="0.00" readonly style="background-color: #FFD580; margin-top:2px;">
+                <!-- Date validité promo et quantité en stock -->
                 <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
                     <div style="display: flex; align-items: center;">
                         <span style="font-size: 11px; font-weight: 500; white-space: nowrap;">Prix valable jusqu'au :</span>
-                        <input type="date" name="supplier_date_validate_promo_${id}[]" placeholder="Date promo" style="margin-left: auto; width: 50%;">
+                        <input type="date" name="supplier_validity_date_${id}[]" style="margin-left: auto; width: 50%;" oninput="updateTotals()">
                     </div>
                     <div style="display: flex; align-items: center;">
                         <span style="font-size: 11px; font-weight: 500; white-space: nowrap;">Quantité en stock :</span>
-						<input type="number" name="supplier_qtt_stock_${id}[]" placeholder="Qté stock" style="margin-left: auto; width: 50%;">
+                        <input type="number" name="supplier_stock_${id}[]" placeholder="Qté stock" style="margin-left: auto; width: 50%;" oninput="updateTotals()">
                     </div>
-                    
                 </div>
             </div>`;
 
         newTd.appendChild(scroller);
-        row.insertBefore(newTd, clientInput.closest('td'));
+        row.insertBefore(newTd, pvcInput.closest('td'));
     });
 
     const supplierInfoBody = document.getElementById('supplier_info_body');
@@ -305,15 +403,15 @@ function addSupplierColumnById(id, name) {
     trInfo.innerHTML = `
         <td>${name}</td>
         <td><input type="number" name="delivery_delay_${id}" min="0" value="0" style="width: 60px;" oninput="highlightBestDelivery()"></td>
-        <td><input type="number" name="delivery_fee_${id}" min="0" step="0.01" value="0.00" style="width: 80px;"></td>
+        <td><input type="number" name="delivery_fee_${id}" min="0" step="0.01" value="0.00" style="width: 80px;" oninput="updateTotals()"></td>
         <td><button type="button" onclick="removeSupplier('${id}')">🗑️</button></td>
     `;
     supplierInfoBody.appendChild(trInfo);
 
     updateSupplierRemoveSelect();
     updateTotals();
+    document.querySelector(`input[name="delivery_fee_${id}"]`)?.addEventListener('input', updateTotals);
 }
-
 
 
 
@@ -414,8 +512,12 @@ function rebuildTable() {
 
 function updateTotals() {
     const rows = document.querySelectorAll('#table_body tr');
+
+    // Totaux par fournisseur
     const supplierTotals = {};
-    selectedSuppliers.forEach(s => supplierTotals[s.id] = 0);
+    selectedSuppliers.forEach(s => {
+        supplierTotals[s.id] = 0;
+    });
 
     let totalVenteClient = 0;
     let totalPVC = 0;
@@ -423,6 +525,7 @@ function updateTotals() {
 
     rows.forEach(row => {
         const qty = parseFloat(row.querySelector('input[name="quantity[]"]').value) || 0;
+
         const clientPriceInput = row.querySelector('input[name="client_price[]"]');
         const clientPrice = parseFloat(clientPriceInput.value) || 0;
         totalVenteClient += clientPrice * qty;
@@ -431,87 +534,113 @@ function updateTotals() {
         const recommendedPrice = parseFloat(recommendedPriceInput.value) || 0;
         totalPVC += recommendedPrice * qty;
 
-        // Calcul prix fournisseur avec remise pour chaque fournisseur
         let bestSupplierPrice = null;
         let bestSupplierId = null;
+
         selectedSuppliers.forEach(s => {
             const priceInput = row.querySelector(`input[name="supplier_price_${s.id}[]"]`);
             const percentInput = row.querySelector(`input[name="supplier_discount_percent_${s.id}[]"]`);
             const amountInput = row.querySelector(`input[name="supplier_discount_amount_${s.id}[]"]`);
+            const netInput = row.querySelector(`input[name="supplier_net_price_${s.id}[]"]`);
 
-            let price = parseFloat(priceInput?.value) || 0;
-            const remPercent = parseFloat(percentInput?.value) || 0;
-            const remAmount = parseFloat(amountInput?.value) || 0;
+            if (!priceInput) return;
 
-            let priceAfterDiscount = price;
-            if (remPercent > 0) priceAfterDiscount = price * (1 - remPercent / 100);
-            if (remAmount > 0) priceAfterDiscount = priceAfterDiscount - remAmount;
-            if(priceAfterDiscount < 0) priceAfterDiscount = 0;
+            // Lecture des valeurs
+            const price = parseFloat(priceInput.value) || 0;
+            const discountPercent = parseFloat(percentInput?.value) || 0;
+            const discountAmount = parseFloat(amountInput?.value) || 0;
 
-            const totalPrice = priceAfterDiscount * qty;
-            supplierTotals[s.id] += totalPrice;
+            // Calcul du prix net
+            const netPrice = Math.max(0, price - discountAmount - (price * discountPercent / 100));
+            if (netInput) netInput.value = netPrice.toFixed(2);
 
-            // Mettre en surbrillance le meilleur prix fournisseur (cellule)
-            const supplierCell = priceInput.closest('td');
-            supplierCell.classList.remove('best-cell');
+            // Frais de livraison
+            const deliveryFeeInput = document.querySelector(`input[name="delivery_fee_${s.id}"]`);
+            const deliveryFee = deliveryFeeInput ? parseFloat(deliveryFeeInput.value) || 0 : 0;
 
-            if (bestSupplierPrice === null || priceAfterDiscount < bestSupplierPrice) {
-                bestSupplierPrice = priceAfterDiscount;
+            // Quantité totale pour ce fournisseur
+            let totalQtyForSupplier = 0;
+            rows.forEach(r => {
+                const q = parseFloat(r.querySelector('input[name="quantity[]"]').value) || 0;
+                const p = r.querySelector(`input[name="supplier_price_${s.id}[]"]`);
+                if (p) totalQtyForSupplier += q;
+            });
+
+            const feePerUnit = totalQtyForSupplier > 0 ? deliveryFee / totalQtyForSupplier : 0;
+
+            // Calcul du total fournisseur
+            const unitCostWithDelivery = netPrice + feePerUnit;
+            supplierTotals[s.id] += unitCostWithDelivery * qty;
+
+            // Détermination du meilleur prix
+            if (bestSupplierPrice === null || netPrice < bestSupplierPrice) {
+                bestSupplierPrice = netPrice;
                 bestSupplierId = s.id;
             }
         });
 
-        // Calcul marge sur cette ligne (si fournisseur choisi dans dropdown)
+        // Calcul de la marge pour le fournisseur sélectionné
         const selectedSupplierId = document.getElementById('selected_supplier_margin').value;
         const margeCell = row.querySelector('.marge-cell');
+
         if (selectedSupplierId && bestSupplierPrice !== null) {
-            // Trouver prix fournisseur de ce fournisseur
             const priceInput = row.querySelector(`input[name="supplier_price_${selectedSupplierId}[]"]`);
             const percentInput = row.querySelector(`input[name="supplier_discount_percent_${selectedSupplierId}[]"]`);
             const amountInput = row.querySelector(`input[name="supplier_discount_amount_${selectedSupplierId}[]"]`);
 
-            if(priceInput) {
-                let price = parseFloat(priceInput.value) || 0;
-                const remPercent = parseFloat(percentInput.value) || 0;
-                const remAmount = parseFloat(amountInput.value) || 0;
-                let priceAfterDiscount = price;
-                if (remPercent > 0) priceAfterDiscount = price * (1 - remPercent / 100);
-                if (remAmount > 0) priceAfterDiscount = priceAfterDiscount - remAmount;
-                if(priceAfterDiscount < 0) priceAfterDiscount = 0;
+            if (priceInput) {
+                const price = parseFloat(priceInput.value) || 0;
+                const discountPercent = parseFloat(percentInput?.value) || 0;
+                const discountAmount = parseFloat(amountInput?.value) || 0;
 
-                const margeValue = clientPrice - priceAfterDiscount;
+                const netPrice = Math.max(0, price - discountAmount - (price * discountPercent / 100));
+
+                const deliveryFeeInput = document.querySelector(`input[name="delivery_fee_${selectedSupplierId}"]`);
+                const deliveryFee = deliveryFeeInput ? parseFloat(deliveryFeeInput.value) || 0 : 0;
+
+                let totalQtyForSupplier = 0;
+                rows.forEach(r => {
+                    const q = parseFloat(r.querySelector('input[name="quantity[]"]').value) || 0;
+                    const p = r.querySelector(`input[name="supplier_price_${selectedSupplierId}[]"]`);
+                    if (p) totalQtyForSupplier += q;
+                });
+
+                const feePerUnit = totalQtyForSupplier > 0 ? deliveryFee / totalQtyForSupplier : 0;
+                const fullCost = netPrice + feePerUnit;
+
+                const margeValue = clientPrice - fullCost;
                 const margePercent = clientPrice > 0 ? (margeValue / clientPrice) * 100 : 0;
+
                 margeCell.textContent = `${margeValue.toFixed(2)} € / ${margePercent.toFixed(1)} %`;
                 totalMarge += margeValue * qty;
             } else {
                 margeCell.textContent = "N/A";
             }
         } else {
-            // Pas de fournisseur choisi => marge avec meilleur prix fournisseur
-            if (bestSupplierPrice !== null) {
-                const margeValue = clientPrice - bestSupplierPrice;
-                const margePercent = clientPrice > 0 ? (margeValue / clientPrice) * 100 : 0;
-                margeCell.textContent = `${margeValue.toFixed(2)} € / ${margePercent.toFixed(1)} %`;
-                totalMarge += margeValue * qty;
-            } else {
-                margeCell.textContent = "N/A";
-            }
+            margeCell.textContent = "N/A";
         }
     });
 
-    // Affichage totaux fournisseurs
+    // Totaux par fournisseur
     selectedSuppliers.forEach(s => {
         const cell = document.getElementById(`total_fournisseur_${s.id}`);
-        if(cell) cell.textContent = supplierTotals[s.id].toFixed(2) + " €";
+        const feeInput = document.querySelector(`input[name="delivery_fee_${s.id}"]`);
+        const deliveryFee = feeInput ? parseFloat(feeInput.value) || 0 : 0;
+        if (cell) {
+            cell.textContent = `${supplierTotals[s.id].toFixed(2)} € (dont ${deliveryFee.toFixed(2)} € livraison)`;
+        }
     });
-    // Affichage totaux clients, PVC, marge
-    document.getElementById('total_vente_client').textContent = totalVenteClient.toFixed(2) + " €";
+
+    // Totaux généraux
     document.getElementById('total_pvc').textContent = totalPVC.toFixed(2) + " €";
+    document.getElementById('total_vente_client').textContent = totalVenteClient.toFixed(2) + " €";
     document.getElementById('total_marge').textContent = totalMarge.toFixed(2) + " €";
 
     highlightBestPriceSupplier();
     highlightBestDelivery();
 }
+
+
 
 function highlightBestPriceSupplier() {
     // Met en vert la cellule fournisseur avec le prix total le plus bas dans le tableau
@@ -548,30 +677,34 @@ function highlightBestPriceSupplier() {
         if(totalCell) totalCell.classList.add('best-cell');
     }
 }
-
 function highlightBestDelivery() {
-    // Met en vert le fournisseur avec le délai de livraison minimum
-    let minDelay = null;
-    let minSupplierId = null;
-    const supplierInfoBody = document.getElementById('supplier_info_body');
-    [...supplierInfoBody.children].forEach(tr => {
-        const delayInput = tr.querySelector(`input[name^="delivery_delay_"]`);
-        const delay = parseInt(delayInput.value) || null;
-        if (delay !== null && (minDelay === null || delay < minDelay)) {
-            minDelay = delay;
-            minSupplierId = tr.dataset.supplierId;
-        }
-        tr.style.backgroundColor = '';
-    });
-    if (minSupplierId) {
-        const tr = supplierInfoBody.querySelector(`tr[data-supplier-id="${minSupplierId}"]`);
-        if(tr) tr.style.backgroundColor = '#90ee90';
+  const supplierInfoBody = document.getElementById('supplier_info_body');
+  if (!supplierInfoBody) return;
+
+  // Trouver le fournisseur qui a la classe 'best-cell' dans la table des prix
+  // (on cherche la cellule total du fournisseur dans highlightBestPriceSupplier)
+  let bestSupplierId = null;
+  selectedSuppliers.forEach(s => {
+    const totalCell = document.getElementById(`total_fournisseur_${s.id}`);
+    if (totalCell && totalCell.classList.contains('best-cell')) {
+      bestSupplierId = s.id;
     }
+  });
+
+  // Enlever toutes les couleurs de fond dans supplier_info_body
+  [...supplierInfoBody.children].forEach(tr => {
+    tr.style.backgroundColor = '';
+  });
+
+  if (bestSupplierId) {
+    // Surligner en vert le fournisseur qui correspond au bestSupplierId
+    const bestTr = supplierInfoBody.querySelector(`tr[data-supplier-id="${bestSupplierId}"]`);
+    if (bestTr) bestTr.style.backgroundColor = '#90ee90';
+  }
 }
 
-function askQuotation() {
-    alert("Fonction Demander cotation à implémenter");
-}
+
+
 function createWord() {
     alert("Fonction Créer un fichier Word à implémenter");
 }
@@ -584,51 +717,81 @@ document.addEventListener('DOMContentLoaded', () => {
     addRow();
     updateTotals();
 });
-// Définit la date de création au chargement de la page
+// Définit la date de création au chargement de la page (format AAAA-MM-JJ pour MySQL)
 document.addEventListener("DOMContentLoaded", function() {
     const today = new Date();
 
-    const day = String(today.getDate()).padStart(2, '0');
-    const month = String(today.getMonth() + 1).padStart(2, '0'); // les mois vont de 0 à 11
     const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0'); // les mois vont de 0 à 11
+    const day = String(today.getDate()).padStart(2, '0');
 
-    const formattedDate = `${day}/${month}/${year}`; // format JJ/MM/AAAA
+    const formattedDate = `${year}-${month}-${day}`; // format AAAA-MM-JJ
     document.getElementById("creation_date").value = formattedDate;
 });
+
 
 </script>
 
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    // Fonction commune pour gérer la touche Entrée dans un tbody donné
-    function handleEnterKeyOnTable(tbodyId) {
-      const tbody = document.getElementById(tbodyId);
-      if (!tbody) return;
+ document.addEventListener('DOMContentLoaded', () => {
+  // Fonction commune pour gérer la touche Entrée dans un tbody donné
+  function handleEnterKeyOnTable(tbodyId) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
 
-      tbody.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
+    tbody.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
 
-          const inputs = Array.from(tbody.querySelectorAll('input, select, textarea'));
-          const currentIndex = inputs.indexOf(event.target);
+        const inputs = Array.from(tbody.querySelectorAll('input, select, textarea'));
+        const currentIndex = inputs.indexOf(event.target);
 
-          if (currentIndex > -1) {
-            const nextInput = inputs[currentIndex + 1];
-            if (nextInput) {
-              nextInput.focus();
-            }
+        if (currentIndex > -1) {
+          const nextInput = inputs[currentIndex + 1];
+          if (nextInput) {
+            nextInput.focus();
           }
         }
-      });
-    }
+      }
+    });
+  }
 
-    // Appliquer sur le tableau principal
-    handleEnterKeyOnTable('table_body');
+  // Appliquer sur le tableau principal
+  handleEnterKeyOnTable('table_body');
 
-    // Appliquer sur le tableau Livraison Fournisseurs
-    handleEnterKeyOnTable('supplier_info_body');
+  // Appliquer sur le tableau Livraison Fournisseurs
+  handleEnterKeyOnTable('supplier_info_body');
+
+  // Écouter les modifications des frais de livraison (seulement si > 0)
+  document.querySelectorAll('input[name^="delivery_fee_"]').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      if (!isNaN(val) && val > 0) {
+        updateTotals();
+      } else {
+        // Si valeur nulle ou vide, on peut forcer la mise à jour pour retirer la surbrillance
+        updateTotals();
+      }
+    });
   });
+});
+
+
+  function toggleQuoteNumberInput() {
+    const mode = document.getElementById('quote_mode').value;
+    const input = document.getElementById('quote_number_input');
+
+    if (mode === 'auto') {
+        input.readOnly = true;
+        input.value = "{{ quote_number }}";
+    } else {
+        input.readOnly = false;
+        input.value = "";  // Champ vide à remplir manuellement
+        input.focus();
+    }
+}
 </script>
+
 
 
 </body>

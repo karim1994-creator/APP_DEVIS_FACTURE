@@ -60,11 +60,6 @@
         </div>
 
         <div class="mb-3">
-            <label for="city" class="form-label">Ville :</label>
-            <input type="text" id="city" name="city" class="form-control" required>
-        </div>
-
-        <div class="mb-3">
             <label for="phone" class="form-label">Téléphone :</label>
             <input type="text" id="phone" name="phone" class="form-control">
         </div>
@@ -90,11 +85,10 @@ function validateSupplierForm() {
     const job = document.getElementById('job').value;
     const company = document.getElementById('company').value;
     const address = document.getElementById('address').value;
-    const city = document.getElementById('city').value;
     const phone = document.getElementById('phone').value;
     const mobile = document.getElementById('mobile').value;
 
-    if (!code || !civility || !email || !job || !company || !address || !city) {
+    if (!code || !civility || !email || !job || !company || !address) {
         alert("Tous les champs obligatoires doivent être remplis.");
         return false;
     }

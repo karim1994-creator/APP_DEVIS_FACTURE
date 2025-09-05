@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Modifier Client{% endblock %}
+{% block title %}Liste des Clients{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
@@ -39,7 +39,7 @@
                 <th>Prénom</th>
                 <th>Entreprise</th>
                 <th>Email</th>
-                <th>Ville</th>
+                <th>Siège social</th>
                 <th>Téléphone</th>
                 <th>Mobile</th>
                 <th>Actions</th>
@@ -53,12 +53,12 @@
                 <td>{{ client.first_name }}</td>
                 <td>{{ client.company }}</td>
                 <td>{{ client.email }}</td>
-                <td>{{ client.city }}</td>
+                <td>{{ client.registred_office }}</td>
                 <td>{{ client.phone }}</td>
                 <td>{{ client.mobile }}</td>
                 <td>
-                    <a href="{{ url_for('edit_client', client_id=client.id) }}" class="btn btn-sm btn-warning">Modifier</a>
-                    <form action="{{ url_for('delete_client', client_id=client.id) }}" method="POST" style="display:inline;">
+                    <a href="{{ url_for('edit_client', client_code=client.code) }}" class="btn btn-sm btn-warning">Modifier</a>
+                    <form action="{{ url_for('delete_client', client_code=client.code) }}" method="POST" style="display:inline;">
                         <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Confirmer la suppression ?')">Supprimer</button>
                     </form>
                 </td>
@@ -67,13 +67,12 @@
         </tbody>
     </table>
 
-    <!-- ✅ Pagination & bouton sur une même ligne -->
     <div class="d-flex justify-content-between align-items-center mt-3">
-        <div>
-            <a href="{{ url_for('add_client') }}" class="btn btn-success">Créer un nouveau client</a>
-        </div>
+        <a href="{{ url_for('add_client') }}" class="btn btn-success">Créer un nouveau client</a>
+
+        <!-- Pagination -->
         <nav aria-label="Pagination">
-          <ul class="pagination justify-content-end mb-0">
+          <ul class="pagination justify-content-end">
             <li class="page-item {% if page <= 1 %}disabled{% endif %}">
               <a class="page-link" href="{{ url_for('list_clients', page=page-1 if page>1 else 1, search=search) }}" aria-label="Précédent">
                 <span aria-hidden="true">&laquo;</span>
@@ -96,22 +95,22 @@
     </div>
 </div>
 
-<!-- Script uniquement pour déclencher la recherche / effacer et recharger la page -->
+<!-- Script de gestion de la recherche -->
 <script>
-let userInteracted = false;
-
 function launchSearch() {
   const input = document.getElementById('searchInput');
   const search = input.value.trim();
   const params = new URLSearchParams(window.location.search);
+
   if (search) {
     params.set('search', search);
-    params.set('page', 1);
+    params.set('page', 1);  // reset page au début pour nouvelle recherche
   } else {
     params.delete('search');
   }
 
-  sessionStorage.setItem('shouldFocusSearch', userInteracted ? '1' : '0');
+  // Stocke dans sessionStorage que l'utilisateur a lancé une recherche (focus à remettre)
+  sessionStorage.setItem('shouldFocusSearch', '1');
   window.location.href = window.location.pathname + '?' + params.toString();
 }
 
@@ -121,27 +120,28 @@ function clearSearch() {
   const params = new URLSearchParams(window.location.search);
   params.delete('search');
   params.set('page', 1);
-
-  sessionStorage.setItem('shouldFocusSearch', userInteracted ? '1' : '0');
+  sessionStorage.setItem('shouldFocusSearch', '1'); // focus après effacement manuel
   window.location.href = window.location.pathname + '?' + params.toString();
 }
 
+// Détection automatique d'effacement manuel
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('searchInput');
-  input.addEventListener('focus', () => userInteracted = true);
   input.addEventListener('input', () => {
     if (input.value.trim() === '') {
       clearSearch();
     }
   });
 
+  // Remet le focus dans le champ si nécessaire
   if (sessionStorage.getItem('shouldFocusSearch') === '1') {
     input.focus();
+    // Place le curseur à la fin du texte
     const val = input.value;
     input.value = '';
     input.value = val;
+    sessionStorage.removeItem('shouldFocusSearch');
   }
-  sessionStorage.removeItem('shouldFocusSearch');
 });
 </script>
 {% endblock %}

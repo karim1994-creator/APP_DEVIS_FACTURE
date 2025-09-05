@@ -55,13 +55,13 @@
         </div>
 
         <div class="mb-3">
-            <label for="address" class="form-label">Adresse :</label>
+            <label for="address" class="form-label">Adresse livraison:</label>
             <input type="text" id="address" name="address" class="form-control" required>
         </div>
 
         <div class="mb-3">
-            <label for="city" class="form-label">Ville :</label>
-            <input type="text" id="city" name="city" class="form-control" required>
+            <label for="registred_office" class="form-label">Siège social:</label>
+            <input type="text" id="registred_office" name="registred_office" class="form-control" required>
         </div>
 
         <div class="mb-3">
@@ -93,10 +93,10 @@ function validateForm() {
     const job = document.getElementById('job').value.trim();
     const company = document.getElementById('company').value.trim();
     const address = document.getElementById('address').value.trim();
-    const city = document.getElementById('city').value.trim();
+    const registred_office = document.getElementById('registred_office').value.trim();
 
     // Vérification des champs obligatoires
-    if (!code || !civility || !email || !job || !company || !address || !city) {
+    if (!code || !civility || !email || !job || !company || !address || !registred_office) {
         alert("Tous les champs obligatoires doivent être remplis.");
         return false;
     }
