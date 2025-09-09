@@ -63,6 +63,13 @@ from models import (
 # Système de fichiers
 import os
 
+from flask import render_template
+from sqlalchemy.orm import joinedload
+from flask import jsonify
+from flask_login import login_required
+from flask import render_template
+from sqlalchemy.orm import joinedload
+
 # ---------------------------------------------------------
 # 📦 Création de l’application Flask
 # ---------------------------------------------------------
@@ -566,11 +573,12 @@ def list_quotes():
                 Quote.quote_number.ilike(search_like),
                 Client.first_name.ilike(search_like),
                 Client.last_name.ilike(search_like),
-                db.cast(Quote.creation_date, db.String).ilike(search_like)
+                db.cast(Quote.date_heur_creation, db.String).ilike(search_like)
             )
         )
 
-    pagination = query.order_by(Quote.creation_date.desc()).paginate(page=page, per_page=per_page)
+    # ✅ Ordonné par date_heur_creation (la plus récente en premier)
+    pagination = query.order_by(Quote.date_heur_creation.desc()).paginate(page=page, per_page=per_page)
     quotes = pagination.items
     total_pages = pagination.pages
 
@@ -593,6 +601,7 @@ def list_quotes():
     )
 
 
+
 # ✅ Adapté pour MySQL
 @app.route('/get_today_quote_count')
 @login_required
@@ -602,8 +611,7 @@ def get_today_quote_count():
         db.func.date_format(Quote.creation_date, '%d_%m_%Y') == today_str
     ).count()
     return jsonify({'count': count})
-from flask import render_template
-from sqlalchemy.orm import joinedload
+
 
 @app.route('/quote/delete/<int:quote_id>', methods=['POST'])
 @login_required
@@ -628,8 +636,7 @@ def delete_quote(quote_id):
     return redirect(url_for('list_quotes'))
 
 
-from flask import jsonify
-from flask_login import login_required
+
 @app.route('/quotes/<int:quote_id>/advance_status', methods=['POST'])
 @login_required
 def advance_status(quote_id):
@@ -1083,8 +1090,7 @@ def edit_quote(quote_id):
     )
 
 
-from flask import render_template
-from sqlalchemy.orm import joinedload
+
 
 @app.route('/view_quote/<int:quote_id>')
 @login_required
@@ -1414,6 +1420,13 @@ def get_suppliers_infos(quote_id):
         "suppliers": suppliers,
         "lines": lines
     })
+
+@app.route('/contact')
+@login_required
+def contact():
+    clients = Client.query.all()
+    suppliers = Supplier.query.all()
+    return render_template('contact.html', clients=clients, suppliers=suppliers)
 
 
 if __name__ == '__main__':

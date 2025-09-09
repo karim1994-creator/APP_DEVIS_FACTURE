@@ -3,11 +3,16 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from itsdangerous import URLSafeTimedSerializer
 from flask import current_app
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import relationship
 from sqlalchemy import Enum
 from flask_login import UserMixin
 
 db = SQLAlchemy()
+
+# Fuseau horaire France
+def now_paris():
+    return datetime.now(ZoneInfo("Europe/Paris"))
 
 # -------------------------------
 # Utilisateurs
@@ -21,6 +26,8 @@ class User(db.Model, UserMixin):
 
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+
+    date_heur_creation = db.Column(db.DateTime, default=now_paris, nullable=False)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -58,8 +65,8 @@ class Client(db.Model):
     registred_office = db.Column(db.String(100))
     phone = db.Column(db.String(50))
     mobile = db.Column(db.String(50))
-    # plus de relation explicite, on laisse le backref dans Quote
 
+    date_heur_creation = db.Column(db.DateTime, default=now_paris, nullable=False)
 
 
 # -------------------------------
@@ -79,6 +86,8 @@ class Supplier(db.Model):
     phone = db.Column(db.String(50))
     mobile = db.Column(db.String(50))
 
+    date_heur_creation = db.Column(db.DateTime, default=now_paris, nullable=False)
+
 
 # -------------------------------
 # Devis
@@ -91,8 +100,9 @@ class Quote(db.Model):
     client_code = db.Column(db.String(50), db.ForeignKey('clients.code'), nullable=False)
     delivery_location = db.Column(db.String(255), nullable=False)
 
-    client = db.relationship('Client', backref='quotes')
+    date_heur_creation = db.Column(db.DateTime, default=now_paris, nullable=False)
 
+    client = db.relationship('Client', backref='quotes')
 
 
 # -------------------------------
@@ -107,6 +117,8 @@ class QuoteLine(db.Model):
     quantity = db.Column(db.Integer)
     client_price = db.Column(db.Float)
     recommended_price = db.Column(db.Float, default=0.0)
+
+    date_heur_creation = db.Column(db.DateTime, default=now_paris, nullable=False)
 
     quote = db.relationship('Quote', backref='lines')
 
@@ -125,6 +137,8 @@ class SupplierPrice(db.Model):
     date_validate_promo = db.Column(db.Date, nullable=True)
     qtt_stock = db.Column(db.Integer, nullable=True)
 
+    date_heur_creation = db.Column(db.DateTime, default=now_paris, nullable=False)
+
     quote_line = db.relationship('QuoteLine', backref='supplier_prices')
     supplier = db.relationship('Supplier')
 
@@ -139,6 +153,8 @@ class QuoteSupplierInfo(db.Model):
     supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False)
     delivery_delay = db.Column(db.Integer)
     delivery_fee = db.Column(db.Float)
+
+    date_heur_creation = db.Column(db.DateTime, default=now_paris, nullable=False)
 
     quote = db.relationship('Quote', backref='supplier_info')
     supplier = db.relationship('Supplier')
@@ -156,6 +172,8 @@ class SuiviQuotes(db.Model):
                    'control_reception', 'livraison_client', 'a_facturer', 
                    'facturation', 'terminé','cloture')
     statut = db.Column(Enum(*statut_enum, name='statut_enum'), nullable=False)
+
+    date_heur_creation = db.Column(db.DateTime, default=now_paris, nullable=False)
 
     quote = db.relationship('Quote', backref='suivi')
 
