@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block title %}Ajouter un Fournisseur{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Ajouter un Fournisseur</h2>
+
+    <form method="post" id="supplierForm" onsubmit="return validateSupplierForm()">
+        <div class="mb-3">
+            <label for="code" class="form-label">Code :</label>
+            <input type="text" id="code" name="code" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="civility" class="form-label">Civilité :</label>
+            <select class="form-select" id="civility" name="civility" required>
+                <option value="" disabled selected>-- Choisissez --</option>
+                <option value="Mr.">Mr</option>
+                <option value="Mme.">Mme</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="last_name" class="form-label">Nom :</label>
+            <input type="text" id="last_name" name="last_name" class="form-control">
+        </div>
+
+        <div class="mb-3">
+            <label for="first_name" class="form-label">Prénom :</label>
+            <input type="text" id="first_name" name="first_name" class="form-control">
+        </div>
+
+        <div class="mb-3">
+            <label for="email" class="form-label">Email :</label>
+            <input 
+                type="email" 
+                id="email" 
+                name="email" 
+                class="form-control" 
+                placeholder="exemple@domaine.com" 
+                style="font-weight: 300; font-style: italic; font-size: 0.9em;" 
+                required
+            >
+        </div>
+
+        <div class="mb-3">
+            <label for="job" class="form-label">Métier/Fonction :</label>
+            <input type="text" id="job" name="job" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="company" class="form-label">Société/Nom :</label>
+            <input type="text" id="company" name="company" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="address" class="form-label">Adresse :</label>
+            <input type="text" id="address" name="address" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="phone" class="form-label">Téléphone :</label>
+            <input type="text" id="phone" name="phone" class="form-control">
+        </div>
+
+        <div class="mb-3">
+            <label for="mobile" class="form-label">Portable :</label>
+            <input type="text" id="mobile" name="mobile" class="form-control">
+        </div>
+
+        <div class="mb-3">
+            <small class="text-muted">* Vous devez remplir soit le champ "Téléphone" soit "Portable".</small>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Ajouter</button>
+    </form>
+</div>
+
+<script>
+function validateSupplierForm() {
+    const code = document.getElementById('code').value;
+    const civility = document.getElementById('civility').value;
+    const email = document.getElementById('email').value;
+    const job = document.getElementById('job').value;
+    const company = document.getElementById('company').value;
+    const address = document.getElementById('address').value;
+    const phone = document.getElementById('phone').value;
+    const mobile = document.getElementById('mobile').value;
+
+    if (!code || !civility || !email || !job || !company || !address) {
+        alert("Tous les champs obligatoires doivent être remplis.");
+        return false;
+    }
+
+    if (!phone && !mobile) {
+        alert("Vous devez remplir soit le champ 'Téléphone' soit 'Portable'.");
+        return false;
+    }
+    return true;
+}
+
+// Gestion professionnelle de la touche "Entrée" pour naviguer entre les champs sans soumission prématurée
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('supplierForm');
+    const focusableElements = Array.from(form.querySelectorAll('input, select, textarea, button'))
+        .filter(el => !el.disabled && el.type !== 'hidden' && el.offsetParent !== null);
+
+    form.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const tag = e.target.tagName.toLowerCase();
+            // Ne pas agir si textarea (car Enter = nouvelle ligne)
+            if (tag === 'textarea') return;
+            // Empêcher soumission
+            e.preventDefault();
+
+            const index = focusableElements.indexOf(e.target);
+            if (index > -1) {
+                // Focus sur le champ suivant
+                const nextIndex = (index + 1) % focusableElements.length;
+                focusableElements[nextIndex].focus();
+            }
+        }
+    });
+});
+</script>
+
+{% endblock %}

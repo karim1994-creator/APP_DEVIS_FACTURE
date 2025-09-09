@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}Liste des Fournisseurs{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Liste des fournisseurs</h1>
+
+    <!-- 🔔 Bloc pour afficher les messages flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Recherche -->
+    <div class="mb-3 d-flex gap-2">
+      <input
+        type="search"
+        id="searchInput"
+        class="form-control"
+        placeholder="Rechercher un fournisseur..."
+        value="{{ search }}"
+        onkeydown="if (event.key === 'Enter') { event.preventDefault(); launchSearch(); }"
+      >
+      <button class="btn btn-outline-secondary" onclick="clearSearch()">Effacer</button>
+    </div>
+
+    <table class="table table-striped table-bordered table-hover">
+        <thead class="table-primary">
+            <tr>
+                <th>Code</th>
+                <th>Nom</th>
+                <th>Prénom</th>
+                <th>Entreprise</th>
+                <th>Email</th>
+                <th>Téléphone</th>
+                <th>Mobile</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for supplier in suppliers.items %}
+            <tr>
+                <td>{{ supplier.code }}</td>
+                <td>{{ supplier.last_name }}</td>
+                <td>{{ supplier.first_name }}</td>
+                <td>{{ supplier.company }}</td>
+                <td>{{ supplier.email }}</td>
+                <td>{{ supplier.phone }}</td>
+                <td>{{ supplier.mobile }}</td>
+                <td>
+                    <a href="{{ url_for('edit_supplier', supplier_id=supplier.id) }}" class="btn btn-sm btn-warning">Modifier</a>
+                    <form action="{{ url_for('delete_supplier', supplier_id=supplier.id) }}" method="POST" style="display:inline;">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Confirmer la suppression ?')">Supprimer</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <a href="{{ url_for('add_supplier') }}" class="btn btn-success">Créer un nouveau fournisseur</a>
+
+        <!-- Pagination -->
+        <nav aria-label="Pagination">
+          <ul class="pagination justify-content-end">
+            <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('list_suppliers', page=page-1 if page>1 else 1, search=search) }}" aria-label="Précédent">
+                <span aria-hidden="true">&laquo;</span>
+              </a>
+            </li>
+
+            {% for p in range(1, total_pages + 1) %}
+              <li class="page-item {% if p == page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('list_suppliers', page=p, search=search) }}">{{ p }}</a>
+              </li>
+            {% endfor %}
+
+            <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('list_suppliers', page=page+1 if page < total_pages else total_pages, search=search) }}" aria-label="Suivant">
+                <span aria-hidden="true">&raquo;</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+    </div>
+</div>
+
+<!-- Script de gestion de la recherche -->
+<script>
+function launchSearch() {
+  const input = document.getElementById('searchInput');
+  const search = input.value.trim();
+  const params = new URLSearchParams(window.location.search);
+  if (search) {
+    params.set('search', search);
+    params.set('page', 1);  // reset page au début pour nouvelle recherche
+  } else {
+    params.delete('search');
+  }
+  // Stocke dans sessionStorage que l'utilisateur a lancé une recherche (focus à remettre)
+  sessionStorage.setItem('shouldFocusSearch', '1');
+  window.location.href = window.location.pathname + '?' + params.toString();
+}
+
+function clearSearch() {
+  const input = document.getElementById('searchInput');
+  input.value = '';
+  const params = new URLSearchParams(window.location.search);
+  params.delete('search');
+  params.set('page', 1);
+  sessionStorage.setItem('shouldFocusSearch', '1'); // focus après effacement manuel
+  window.location.href = window.location.pathname + '?' + params.toString();
+}
+
+// 🆕 Détection automatique d'effacement manuel
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('searchInput');
+  input.addEventListener('input', () => {
+    if (input.value.trim() === '') {
+      clearSearch();
+    }
+  });
+
+  // Remet le focus dans le champ si nécessaire
+  if (sessionStorage.getItem('shouldFocusSearch') === '1') {
+    input.focus();
+    // Place le curseur à la fin du texte
+    const val = input.value;
+    input.value = '';
+    input.value = val;
+    sessionStorage.removeItem('shouldFocusSearch');
+  }
+});
+</script>
+{% endblock %}

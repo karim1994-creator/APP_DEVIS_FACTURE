@@ -1,0 +1,308 @@
+{% extends 'base.html' %}
+
+{% block title %}Liste des devis{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <h1 class="mb-4">Liste des devis</h1>
+
+  <!-- Barre de recherche -->
+  <div class="mb-3 d-flex gap-2">
+    <input
+      id="searchInput"
+      type="search"
+      class="form-control"
+      placeholder="Rechercher un devis, client, date..."
+      value="{{ search }}"
+      aria-label="Recherche"
+      onkeydown="if (event.key === 'Enter') { event.preventDefault(); launchSearch(); }"
+    >
+    <button class="btn btn-outline-secondary" onclick="clearSearch()">Effacer</button>
+  </div>
+
+  <table class="table table-striped table-bordered table-hover">
+    <thead class="table-primary">
+      <tr>
+        <th>Numéro de devis</th>
+        <th>Date création</th>
+        <th>Client</th>
+        <th>Action</th>
+        <th>Demander Cotation</th>
+        <th>Modifier/Compléter</th>
+        <th>Devis Client</th>
+        <th>Devis provisoire</th>
+        <th>Supprimer</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for q in quotes %}
+      <tr>
+        <td>{{ q.quote_number }}</td>
+        <td>{{ q.date_heur_creation.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td>{{ q.client.first_name or '' }} {{ q.client.last_name or '' }}</td>
+
+        <!-- Colonne Action -->
+        <td>
+          {% set status_colors = {
+            'validate_commande': '#28A745',
+            'commande': '#007BFF',
+            'reception': '#28A745',
+            'control_reception': '#FFC107',
+            'livraison_client': '#6F42C1',
+            'a_facturer': '#FFC107',
+            'facturation': '#DC3545'
+          } %}
+          {% set status_labels = {
+            'validate_commande': 'Valider',
+            'commande': 'Commander',
+            'reception': 'Réception',
+            'control_reception': 'Contrôle de réception',
+            'livraison_client': 'Livraison client',
+            'a_facturer': 'A Facturer',
+            'facturation': 'Facturation'
+          } %}
+
+          {% set current_status = suivi_map.get(q.id) %}
+          {% if current_status %}
+            <button class="btn btn-sm btn-action-status"
+                    data-quote-id="{{ q.id }}"
+                    data-quote-number="{{ q.quote_number }}"
+                    data-current-statut="{{ current_status }}"
+                    style="background-color: {{ status_colors.get(current_status, 'grey') }}; color: white;">
+              {{ status_labels.get(current_status, 'Terminé') }}
+            </button>
+          {% else %}
+            <span class="badge bg-secondary">Terminé</span>
+          {% endif %}
+        </td>
+
+        <!-- Colonne Demander Cotation -->
+        <td>
+          <button type="button" class="btn btn-sm btn-outline-info" onclick="askQuotation({{ q.id }})">
+            Demander cotation
+          </button>
+          <div id="fournisseurSelectContainer-{{ q.id }}" style="display:none; margin-top:5px;">
+            <label for="fournisseurSelect-{{ q.id }}">Choisir un fournisseur :</label>
+            <select id="fournisseurSelect-{{ q.id }}" class="form-control">
+              <option value="">-- Sélectionner --</option>
+            </select>
+          </div>
+        </td>
+
+        <!-- Modifier / Compléter -->
+        <td>
+          <form action="{{ url_for('edit_quote', quote_id=q.id) }}" method="GET">
+            <button type="submit" class="btn btn-sm btn-warning">Modifier / Compléter</button>
+          </form>
+        </td>
+
+        <!-- Devis Client -->
+        <td>
+          <a href="{{ url_for('view_quote', quote_id=q.id) }}" class="btn btn-sm btn-outline-primary">Voir/Exporter</a>
+        </td>
+
+        <!-- Devis Provisoire -->
+        <td>
+          <a href="{{ url_for('quote_detail', quote_id=q.id) }}" class="btn btn-sm btn-outline-primary">Voir détail</a>
+        </td>
+
+        <!-- Supprimer -->
+        <td>
+          <form action="{{ url_for('delete_quote', quote_id=q.id) }}" method="POST"
+                onsubmit="return confirm('Voulez-vous vraiment supprimer ce devis et toutes ses données associées ?');">
+            <button type="submit" class="btn btn-sm btn-danger">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Pagination et création -->
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <div>
+      <a href="{{ url_for('create_quote') }}" class="btn btn-success">Créer un nouveau devis</a>
+    </div>
+    <nav aria-label="Pagination">
+      <ul class="pagination justify-content-end mb-0">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('list_quotes', page=page-1 if page>1 else 1, search=search) }}" aria-label="Précédent">
+            <span aria-hidden="true">&laquo;</span>
+          </a>
+        </li>
+        {% for p in range(1, total_pages + 1) %}
+          <li class="page-item {% if p == page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('list_quotes', page=p, search=search) }}">{{ p }}</a>
+          </li>
+        {% endfor %}
+        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('list_quotes', page=page+1 if page < total_pages else total_pages, search=search) }}" aria-label="Suivant">
+            <span aria-hidden="true">&raquo;</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</div>
+
+<script>
+// --------- BARRE DE RECHERCHE ---------
+function launchSearch() {
+  const input = document.getElementById('searchInput');
+  const search = input.value.trim();
+  const params = new URLSearchParams(window.location.search);
+
+  if (search) {
+    params.set('search', search);
+    params.set('page', 1);
+  } else {
+    params.delete('search');
+  }
+
+  sessionStorage.setItem('shouldFocusSearch', '1');
+  window.location.href = window.location.pathname + '?' + params.toString();
+}
+
+function clearSearch() {
+  const input = document.getElementById('searchInput');
+  input.value = '';
+  const params = new URLSearchParams(window.location.search);
+  params.delete('search');
+  params.set('page', 1);
+  sessionStorage.setItem('shouldFocusSearch', '1');
+  window.location.href = window.location.pathname + '?' + params.toString();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('searchInput');
+  input.addEventListener('input', () => {
+    if (input.value.trim() === '') clearSearch();
+  });
+
+  if (sessionStorage.getItem('shouldFocusSearch') === '1') {
+    input.focus();
+    const val = input.value;
+    input.value = '';
+    input.value = val;
+    sessionStorage.removeItem('shouldFocusSearch');
+  }
+});
+
+// --------- GESTION DES ACTIONS STATUT ---------
+document.querySelectorAll('.btn-action-status').forEach(button => {
+  button.addEventListener('click', () => {
+    const quoteId       = button.dataset.quoteId;
+    const quoteNumber   = button.dataset.quoteNumber;
+    const currentStatut = button.dataset.currentStatut;
+
+    const messages = {
+      'validate_commande': 'Confirmez-vous la validation du devis et le passage à l’étape « Commander » ?',
+      'commande': 'Confirmez-vous que la commande a été passée et souhaitez-vous passer à l’étape « Réception » ?',
+      'reception': 'Confirmez-vous que la commande a été réceptionnée et souhaitez-vous passer à l’étape « Contrôle de réception » ?',
+      'control_reception': 'Confirmez-vous que la réception a été contrôlée et souhaitez-vous passer à l’étape « Livraison client » ?',
+      'livraison_client': 'Confirmez-vous que la livraison a été effectuée et souhaitez-vous passer à l’étape « Préparer la facture » ?',
+      'a_facturer': 'Confirmez-vous la finalisation de la facture et souhaitez-vous passer le devis à l’étape « Facturation » ?',
+      'facturation': 'Le paiement a-t-il été reçu ? Le devis sera alors marqué comme terminé.'
+    };
+
+    if (!messages[currentStatut]) { alert('Statut final, devis terminé'); return; }
+    if (!confirm(messages[currentStatut])) return;
+
+    fetch(`/quotes/${quoteId}/advance_status`, { method:'POST', headers:{'Content-Type':'application/json'} })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.success) { alert('Erreur : ' + data.message); return; }
+
+        // MAJ bouton
+        if ((data.new_statut || '').toLowerCase() === 'terminé') {
+          const badge = document.createElement('span');
+          badge.className = 'badge bg-secondary';
+          badge.textContent = 'Terminé';
+          button.replaceWith(badge);
+        } else {
+          button.textContent = data.new_statut_label; 
+          const colors = {
+            'Valider': '#28A745',
+            'Commander': '#007BFF',
+            'Réception': '#28A745',
+            'Contrôle de réception': '#FFC107',
+            'Livraison client': '#6F42C1',
+            'A facturer': '#FFC107',
+            'Facturation': '#DC3545'
+          };
+          button.style.backgroundColor = colors[data.new_statut_label] || 'grey';
+          button.dataset.currentStatut = data.new_statut;
+        }
+
+        // Générer mail
+        const client_name    = data.client_name || 'Client inconnu';
+        const client_company = data.client_company || '';
+        const delivery       = data.delivery_location || 'Adresse inconnue';
+
+        let linesText = '';
+        if (data.lines && data.lines.length > 0) {
+          data.lines.forEach(l => {
+            linesText += `${l.quantity} Produit(s) de Réf ${l.supplier_ref}: ${l.description}\n`;
+          });
+        }
+
+        const subject = `Changement de statut du devis ${quoteNumber}`;
+        const body = `Bonjour,
+
+Je me permets de vous contacter dans le cadre du devis ${quoteNumber} pour ${client_name}${client_company ? ' ('+client_company+')' : ''}. 
+Le devis est passé au statut : ${data.new_statut_label}.
+
+
+${linesText}
+
+Le devis sera livré à l’adresse suivante :
+${delivery}
+
+Cordialement,
+Atlantis Evolution`;
+
+        const link = `mailto:f.bertolini@atlantis-evolution.com,admin@atlantis-evolution.com,support@atlantis-evolution.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.location.href = link;
+
+      })
+      .catch(()=>alert('Erreur réseau'));
+  });
+});
+
+// --------- BOUTON DEMANDER COTATION ---------
+function askQuotation(quoteId) {
+    const container = document.getElementById(`fournisseurSelectContainer-${quoteId}`);
+    const select = document.getElementById(`fournisseurSelect-${quoteId}`);
+    container.style.display = 'block';
+
+    fetch(`/quotes/${quoteId}/suppliers_infos`)
+        .then(res => res.json())
+        .then(data => {
+            select.innerHTML = '<option value="">-- Sélectionner --</option>';
+            data.suppliers.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.company || `Fournisseur ${s.id}`;
+                if (s.email) opt.dataset.email = s.email;
+                select.appendChild(opt);
+            });
+
+            select.onchange = function () {
+                const selected = select.options[select.selectedIndex];
+                const email = selected?.dataset?.email || '';
+                if (!email) { alert("⚠️ Ce fournisseur n’a pas d’email."); return; }
+
+                let corps = "Bonjour, \nJe me permets de vous contacter dans le cadre d’un devis que nous préparons pour un client. \nNous souhaiterions obtenir votre meilleure offre pour les produits suivants :\nProduits :\n";
+                data.lines.forEach(p => {
+                    corps += `${p.quantity} Produit(s) de Réf ${p.supplier_ref}: ${p.description}\n`;
+                });
+                corps += "\nMerci de bien vouloir nous communiquer vos conditions, notamment les éventuelles remises en euros ou en pourcentage :\nRemise (€) : __________\nRemise (%) : __________\nMerci.\nAtlantis Evolution";
+
+                const mailtoLink = `mailto:${email}?subject=${encodeURIComponent('Demande cotation')}&body=${encodeURIComponent(corps)}`;
+                window.location.href = mailtoLink;
+            };
+        })
+        .catch(() => alert('Erreur réseau lors de la récupération des fournisseurs.'));
+}
+</script>
+{% endblock %}

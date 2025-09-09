@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Contact{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="text-center mb-4">
+        <h2><i class="fas fa-envelope text-primary"></i> Page de Contact</h2>
+        <p class="text-muted">Sélectionnez un destinataire et contactez-le directement par email.</p>
+    </div>
+
+    <div class="row">
+        <!-- Bloc Clients -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <i class="fas fa-user-tie"></i> Contacter un Client
+                </div>
+                <div class="card-body">
+                    <label for="clientSelect" class="form-label">Choisissez un client :</label>
+                    <select id="clientSelect" class="form-select">
+                        <option value="">-- Sélectionner un client --</option>
+                        {% for client in clients %}
+                            {% if client.company and client.email %}
+                                <option value="{{ client.email }}">
+                                    {{ client.company }} ({{ client.email }})
+                                </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted d-block mt-2">
+                        L’adresse email du client sélectionné sera utilisée comme destinataire.
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bloc Fournisseurs -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-success text-white">
+                    <i class="fas fa-industry"></i> Contacter un Fournisseur
+                </div>
+                <div class="card-body">
+                    <label for="supplierSelect" class="form-label">Choisissez un fournisseur :</label>
+                    <select id="supplierSelect" class="form-select">
+                        <option value="">-- Sélectionner un fournisseur --</option>
+                        {% for supplier in suppliers %}
+                            {% if supplier.company and supplier.email %}
+                                <option value="{{ supplier.email }}">
+                                    {{ supplier.company }} ({{ supplier.email }})
+                                </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted d-block mt-2">
+                        L’adresse email du fournisseur sélectionné sera utilisée comme destinataire.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Ouverture d'un email quand on choisit un client
+    document.getElementById("clientSelect").addEventListener("change", function() {
+        const email = this.value;
+        if (email) {
+            window.location.href = "mailto:" + email;
+        }
+    });
+
+    // Ouverture d'un email quand on choisit un fournisseur
+    document.getElementById("supplierSelect").addEventListener("change", function() {
+        const email = this.value;
+        if (email) {
+            window.location.href = "mailto:" + email;
+        }
+    });
+</script>
+{% endblock %}
